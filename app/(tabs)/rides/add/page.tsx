@@ -31,6 +31,7 @@ export default async function AddFlightPage({
       <SignupGate
         title="Post your flight"
         blurb="Share your airport ride with everyone landing in your window."
+        next="/rides/add"
       />
     );
   }

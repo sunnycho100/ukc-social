@@ -21,6 +21,7 @@ export default async function MePage() {
       <SignupGate
         title="Create your profile"
         blurb="Save your photo, interests, and details so we can seat and match you well."
+        next="/me"
       />
     );
   }

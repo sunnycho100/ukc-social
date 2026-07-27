@@ -47,7 +47,7 @@ export default function TabBar() {
   const pathname = usePathname();
 
   return (
-    <nav className="tabbar">
+    <nav className="tabbar" aria-label="Main">
       {tabs.map((tab) => {
         const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
         return (
@@ -87,8 +87,8 @@ export default function TabBar() {
           justify-content: space-around;
           padding-bottom: env(safe-area-inset-bottom);
           background: var(--glass);
-          backdrop-filter: blur(20px) saturate(180%);
-          -webkit-backdrop-filter: blur(20px) saturate(180%);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
           border-top: 1px solid var(--glass-line);
         }
         .tabbar__item {
@@ -97,13 +97,15 @@ export default function TabBar() {
           flex-direction: column;
           align-items: center;
           gap: 4px;
-          padding: 8px 0 10px;
+          padding: 8px 0 9px;
           text-decoration: none;
           transition: color 180ms ease-out;
         }
+        /* Bar is flush to the viewport edge — pull the ring inside so it isn't clipped. */
+        .tabbar__item:focus-visible { outline-offset: -2px; }
         .tabbar__label {
           font-size: 11px;
-          line-height: 1;
+          line-height: 1.15;
           letter-spacing: -0.01em;
         }
         @media (prefers-reduced-transparency: reduce) {

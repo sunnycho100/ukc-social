@@ -29,6 +29,10 @@ function LoginInner() {
   const [busy, setBusy] = useState<null | "email" | "google" | "guest">(null);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState(params.get("error") === "auth" ? "That link didn't work. Try again." : "");
+  // Where a gated action sent us from (SignupGate passes ?next=). Only same-origin
+  // paths are honored, so the param can't be used to bounce anyone off-site.
+  const nextParam = params.get("next");
+  const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
 
   async function withGoogle() {
     setBusy("google");
@@ -89,7 +93,9 @@ function LoginInner() {
       });
       setBusy(null);
       if (error) return setError(friendly(error.message));
-      router.push("/home");
+      // Signing in already has a profile, so honor the gated destination.
+      // New signups still route through /welcome for onboarding first.
+      router.push(next ?? "/home");
       router.refresh();
     }
   }

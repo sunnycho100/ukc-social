@@ -23,6 +23,7 @@ export default async function MentorPage() {
       <SignupGate
         title="Get matched one-on-one"
         blurb="We pair you with someone a step ahead on your path and make the intro."
+        next="/mentor"
       />
     );
   }
