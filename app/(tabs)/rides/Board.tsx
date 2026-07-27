@@ -25,18 +25,20 @@ export function Board({ arrivals, departures }: { arrivals: Row[]; departures: R
 
   return (
     <>
-      <div className="board-dir" role="tablist" aria-label="Arrivals or departures">
+      {/* Plain toggle buttons: tablist semantics without a tabpanel or arrow-key
+          handling announce affordances that don't exist. aria-pressed is honest. */}
+      <div className="board-dir" role="group" aria-label="Arrivals or departures">
         <button
-          role="tab"
-          aria-selected={dir === "arrival"}
+          type="button"
+          aria-pressed={dir === "arrival"}
           className={dir === "arrival" ? "board-dir-on" : "board-dir-off"}
           onClick={() => setDir("arrival")}
         >
           Arrivals
         </button>
         <button
-          role="tab"
-          aria-selected={dir === "departure"}
+          type="button"
+          aria-pressed={dir === "departure"}
           className={dir === "departure" ? "board-dir-on" : "board-dir-off"}
           onClick={() => setDir("departure")}
         >

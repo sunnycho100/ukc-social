@@ -58,10 +58,10 @@ export default async function RidesPage() {
 
   return (
     <section className="rides">
-      <header className="rides-head">
-        <p className="rides-kicker">Orlando MCO · UKC 2026</p>
-        <h1 className="rides-title">Rides</h1>
-        <p className="rides-sub">See who flies near your time, then split a car.</p>
+      <header className="page-head">
+        <p className="page-kicker">Orlando MCO · UKC 2026</p>
+        <h1 className="page-title">Rides</h1>
+        <p className="page-sub">See who flies near your time, then split a car.</p>
       </header>
 
       <Board arrivals={arrivals} departures={departures} />
@@ -75,32 +75,11 @@ function RidesStyles() {
   return (
     <style>{`
       .rides { padding: 28px 20px 24px; }
-      .rides-head { margin-bottom: 20px; }
-      .rides-kicker {
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--accent);
-      }
-      .rides-title {
-        font-size: 40px;
-        font-weight: 800;
-        line-height: 1;
-        letter-spacing: -0.03em;
-        margin-top: 10px;
-      }
-      .rides-sub {
-        margin-top: 10px;
-        font-size: 15px;
-        color: var(--ink-2);
-        max-width: 34ch;
-      }
 
       /* direction toggle — editorial text tabs, not a grey segmented control */
       .board-dir { display: flex; gap: 22px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
       .board-dir-on, .board-dir-off {
-        background: none; border: none; padding: 0 0 12px; cursor: pointer;
+        background: none; border: none; padding: 11px 0; min-height: 44px; cursor: pointer;
         font-family: var(--font-display), sans-serif;
         font-size: 18px; font-weight: 700; letter-spacing: -0.01em;
       }
@@ -111,7 +90,16 @@ function RidesStyles() {
       /* the board — hairline-divided rows, no cards */
       .board { border-bottom: 1px solid var(--line); margin: 8px 0 20px; }
       .arr { border-top: 1px solid var(--line); }
-      .arr-hot { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+      /* The 7% wash alone is ~1.07:1 against the page — invisible outdoors and
+         meaningless to AT. The inset rule carries the signal; the tint is mood. */
+      .arr-hot {
+        background: color-mix(in srgb, var(--accent) 7%, transparent);
+        box-shadow: inset 2px 0 0 0 var(--accent);
+      }
+      .arr-near {
+        font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+        text-transform: uppercase; color: var(--accent); white-space: nowrap;
+      }
       .arr-main {
         display: grid;
         grid-template-columns: auto 1fr auto;
@@ -129,7 +117,9 @@ function RidesStyles() {
         white-space: nowrap;
       }
       .arr-body { min-width: 0; }
-      .arr-name { font-size: 16px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+      /* wrap + shrink so a long Korean name doesn't push the badges out */
+      .arr-name { font-size: 16px; font-weight: 600; color: var(--ink); display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+      .arr-name-text { min-width: 0; overflow-wrap: anywhere; }
       .arr-you {
         font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
         color: var(--accent);
@@ -159,22 +149,23 @@ function RidesStyles() {
         color: var(--ink-2);
         white-space: nowrap;
       }
+      /* hairline band, not a card — matches the rest of the board */
       .arr-ack {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        margin: 0 8px 14px;
-        padding: 10px 14px;
-        border-radius: 12px;
-        background: color-mix(in srgb, var(--accent) 12%, transparent);
+        margin: 0 8px 10px;
+        padding: 4px 0 6px;
+        border-top: 1px solid var(--accent);
         font-size: 13px;
         color: var(--ink);
       }
+      .arr-ack:empty { display: none; }
       .arr-undo {
         flex-shrink: 0;
-        min-height: 32px;
-        padding: 0 8px;
+        min-height: 44px;
+        padding: 0 12px;
         background: none;
         border: none;
         color: var(--accent);

@@ -11,6 +11,10 @@ export async function setMentorOptin(optin: boolean): Promise<Result> {
     .from("profiles")
     .update({ mentor_optin: optin })
     .eq("id", user.id);
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    // Log the real Postgres/RLS message; never render it to a user.
+    console.error("setMentorOptin failed", error);
+    return { ok: false, error: "Couldn't save that. Try again." };
+  }
   return { ok: true };
 }

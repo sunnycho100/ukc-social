@@ -9,9 +9,19 @@ import { MentorOptIn } from "./MentorOptIn";
 // a real job title but no student marker is treated as a mentor.
 function roleFromPosition(position: string): "mentor" | "mentee" {
   const p = position.toLowerCase();
-  if (/\bph\.?\s?d\b|postdoc|professor|founder|ceo|cto|director|principal|\bstaff\b/.test(p))
+  if (
+    /\bph\.?\s?d\b|postdoc|professor|founder|ceo|cto|director|principal|\bstaff\b|박사|교수|연구원/.test(
+      p,
+    )
+  )
     return "mentor";
-  if (/undergrad|bachelor|\bms\b|\bma\b|master|\bstudent\b|sophomore|junior|freshman|senior/.test(p))
+  // "senior" only counts as a student marker in a school context — a "Senior
+  // Software Engineer" is not a mentee.
+  if (
+    /undergrad|bachelor|\bms\b|\bma\b|master|\bstudent\b|sophomore|freshman|\b(high school|hs|college)\s+senior\b|석사|학부|대학원|학생/.test(
+      p,
+    )
+  )
     return "mentee";
   return "mentor";
 }
@@ -56,31 +66,21 @@ export default async function MentorPage() {
 
   return (
     <section style={{ padding: "24px 20px 40px", maxWidth: 560, margin: "0 auto" }}>
-      <Link href="/" className="mx-back" aria-label="Back to home">
-        ‹ Home
+      <Link href="/home" className="mx-back">
+        <span aria-hidden>‹</span> Home
       </Link>
 
-      <div className="eyebrow" style={{ marginTop: 20 }}>
-        1:1 matching
-      </div>
-      <h1
-        style={{
-          fontSize: 38,
-          fontWeight: 800,
-          letterSpacing: "-0.03em",
-          lineHeight: 1.02,
-          marginTop: 10,
-          textWrap: "balance",
-        }}
-      >
-        Meet one person, properly
-      </h1>
-
-      <p style={{ marginTop: 14, fontSize: 16, color: "var(--ink-2)", lineHeight: 1.5, maxWidth: "44ch" }}>
-        {isMentor
-          ? "Bring someone up. We match you with a student who's where you were, and make the intro so it isn't on either of you to reach out cold."
-          : "Get an hour with someone a step ahead on the path you're on. No cold DMs. We find the person and make the intro for you."}
-      </p>
+      <header className="page-head" style={{ marginTop: 20 }}>
+        <p className="page-kicker">1:1 matching</p>
+        <h1 className="page-title" style={{ textWrap: "balance" }}>
+          Meet one person, properly
+        </h1>
+        <p className="page-sub" style={{ marginTop: 14, fontSize: 16, maxWidth: "44ch" }}>
+          {isMentor
+            ? "Bring someone up. We match you with a student who's where you were, and make the intro so it isn't on either of you to reach out cold."
+            : "Get an hour with someone a step ahead on the path you're on. No cold DMs. We find the person and make the intro for you."}
+        </p>
+      </header>
 
       <div className="mx-role">
         Based on your profile{position ? ` (${position})` : ""}, you&apos;d be matched as a{" "}
@@ -97,13 +97,6 @@ export default async function MentorPage() {
           font-size: 15px;
           font-weight: 600;
           color: var(--ink-2);
-        }
-        .eyebrow {
-          font-size: 12px;
-          font-weight: 600;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          color: var(--accent);
         }
         .mx-role {
           margin-top: 20px;
