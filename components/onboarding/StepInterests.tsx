@@ -46,7 +46,7 @@ export default function StepInterests({
 
   return (
     <>
-      <span className="ob-kicker">Set up · 2 of 3</span>
+      <span className="ob-kicker">Set up · 3 of 5</span>
       <h1 className="ob-title">What are you into?</h1>
       <p className="ob-sub">
         Pick a few. We&apos;ll use these to seat you.{" "}

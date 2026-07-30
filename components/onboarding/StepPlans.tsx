@@ -2,37 +2,55 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { toLocalInput } from "@/lib/rides";
+import type { Conference } from "@/lib/conference";
 
 type Slot = { id: string; title: string; starts_at: string };
+export type Flight = { arrival: string; departure: string };
 
-function whenLabel(iso: string) {
+function whenLabel(iso: string, timezone: string) {
   const d = new Date(iso);
   return d.toLocaleString(undefined, {
     weekday: "short",
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "America/New_York",
+    timeZone: timezone,
   });
 }
 
 export default function StepPlans({
   value,
   onChange,
+  flight,
+  onFlightChange,
   onFinish,
   onBack,
   busy,
   error,
+  conference,
 }: {
   value: string[];
   onChange: (v: string[]) => void;
+  flight: Flight;
+  onFlightChange: (f: Flight) => void;
   onFinish: () => void;
   onBack: () => void;
   busy: boolean;
   error: string;
+  conference: Conference | null;
 }) {
+  const timezone = conference?.timezone ?? "America/New_York";
+  // Conference dates as a starting point — picking a datetime-local value from
+  // completely blank means setting year/month/day/hour/minute one at a time,
+  // which is exactly the friction this sidesteps. Still fully editable.
+  const defaultArrival = conference
+    ? `${toLocalInput(conference.starts_at, timezone).slice(0, 10)}T12:00`
+    : "";
+  const defaultDeparture = conference
+    ? `${toLocalInput(conference.ends_at, timezone).slice(0, 10)}T12:00`
+    : "";
   const [slots, setSlots] = useState<Slot[] | null>(null);
-  const [showFlight, setShowFlight] = useState(false);
-  const [flight, setFlight] = useState({ airline: "", number: "", arrival: "" });
+  const [showFlight, setShowFlight] = useState(!!(flight.arrival || flight.departure));
 
   useEffect(() => {
     createClient()
@@ -43,37 +61,12 @@ export default function StepPlans({
       .then(({ data }) => setSlots((data as Slot[]) ?? []));
   }, []);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("ukc-flight");
-      if (raw) {
-        setFlight(JSON.parse(raw));
-        setShowFlight(true);
-      }
-    } catch {
-      /* ignore malformed */
-    }
-  }, []);
-
-  function saveFlight(next: typeof flight) {
-    setFlight(next);
-    const empty = !next.airline && !next.number && !next.arrival;
-    if (empty) localStorage.removeItem("ukc-flight");
-    else localStorage.setItem("ukc-flight", JSON.stringify(next));
-  }
-
   const toggle = (id: string) =>
     onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
 
-  const FLIGHT_FIELDS = [
-    ["airline", "Airline", "Airline (e.g. Korean Air)", "text"],
-    ["number", "Flight number", "Flight number (e.g. KE081)", "text"],
-    ["arrival", "Arrival", "Arrival", "datetime-local"],
-  ] as const;
-
   return (
     <>
-      <span className="ob-kicker">Set up · 3 of 3</span>
+      <span className="ob-kicker">Set up · 5 of 5</span>
       <h1 className="ob-title">Which dinners are you in for?</h1>
       <p className="ob-sub">Pick any. We&apos;ll seat you with people worth meeting.</p>
 
@@ -101,7 +94,7 @@ export default function StepPlans({
                 <span style={{ flex: 1 }}>
                   <span style={{ display: "block", fontWeight: 600 }}>{s.title}</span>
                   <span style={{ fontSize: 13, color: "var(--ink-2)" }}>
-                    {whenLabel(s.starts_at)}
+                    {whenLabel(s.starts_at, timezone)}
                   </span>
                 </span>
               </button>
@@ -114,26 +107,44 @@ export default function StepPlans({
         <button
           type="button"
           className="ob-textlink"
-          onClick={() => setShowFlight((v) => !v)}
+          onClick={() => {
+            setShowFlight((v) => {
+              const opening = !v;
+              if (opening && !flight.arrival && !flight.departure && defaultArrival) {
+                onFlightChange({ arrival: defaultArrival, departure: defaultDeparture });
+              }
+              return opening;
+            });
+          }}
           aria-expanded={showFlight}
         >
-          {showFlight ? "− Flight info" : "+ Add flight info (optional)"}
+          {showFlight ? "− Flying in or out?" : "+ Flying in or out? (optional)"}
         </button>
         {showFlight && (
           <div style={{ display: "flex", flexDirection: "column", marginTop: 4 }}>
-            {FLIGHT_FIELDS.map(([key, label, ph, type]) => (
-              <input
-                key={key}
-                type={type}
-                className="ob-field"
-                aria-label={label}
-                value={flight[key]}
-                placeholder={ph}
-                onChange={(e) => saveFlight({ ...flight, [key]: e.target.value })}
-              />
-            ))}
+            <label className="ob-label" htmlFor="ob-arrival" style={{ marginTop: 0 }}>
+              Landing
+            </label>
+            <input
+              id="ob-arrival"
+              type="datetime-local"
+              className="ob-field"
+              value={flight.arrival}
+              onChange={(e) => onFlightChange({ ...flight, arrival: e.target.value })}
+            />
+            <label className="ob-label" htmlFor="ob-departure">
+              Leaving
+            </label>
+            <input
+              id="ob-departure"
+              type="datetime-local"
+              className="ob-field"
+              value={flight.departure}
+              onChange={(e) => onFlightChange({ ...flight, departure: e.target.value })}
+            />
             <p style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 10 }}>
-              Used later to suggest airport rides. You can add it anytime.
+              We&apos;ll match you with others flying near the same time — just the time,
+              nothing else. Edit anytime on Me.
             </p>
           </div>
         )}

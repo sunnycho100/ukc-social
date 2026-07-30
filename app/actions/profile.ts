@@ -3,6 +3,9 @@
 import { createServerSupabase } from "@/lib/supabase/server";
 
 type ProfileInput = Partial<{
+  event_id: string | null;
+  stay_start: string | null;
+  stay_end: string | null;
   name: string;
   school: string;
   position: string;

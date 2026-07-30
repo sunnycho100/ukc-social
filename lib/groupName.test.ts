@@ -42,4 +42,37 @@ describe("nameGroup", () => {
     const names = nameGroups(groups, profiles);
     expect(new Set(names).size).toBe(3); // all three cs_data groups get distinct names
   });
+
+  // BUG FIX regression: Math.ceil(0/2) === 0, and every category's hit-count (also 0 for
+  // an empty group) trivially satisfied `hits >= majority` when majority was 0 — an empty
+  // group used to get a confident vibe name (e.g. "Send It") with zero members backing it.
+  it("does not falsely match a vibe/field for an empty group — falls to mixed", () => {
+    expect(bank.mixed).toContain(nameGroup([]));
+  });
+
+  it("does not falsely match a vibe/field for a single member with no signal", () => {
+    expect(bank.mixed).toContain(nameGroup([M({})]));
+  });
+
+  it("still allows a genuine single-member vibe match (n=1, majority=1)", () => {
+    // With the majority-floored-at-1 fix, a lone member who *does* carry the
+    // interest still earns the vibe name (1 hit >= majority 1) — the fix only
+    // guards the zero-signal case, it doesn't require >1 members for a vibe match.
+    expect(bank.vibe.coffee).toContain(nameGroup([M({ interests: ["coffee"] })]));
+  });
+
+  it("falls through to a field/mixed name once a vibe pool is fully used up in the batch", () => {
+    // "startups" has exactly one name in the bank (Founder Mode, see
+    // data/group-names.json) — a second group sharing that vibe in the same
+    // batch can't reuse it and must fall through to the next tier instead of
+    // returning undefined/crashing.
+    const startupMembers = () => [M({ interests: ["startups"] }), M({ interests: ["startups"] })];
+    const used = new Set<string>();
+    const first = nameGroup(startupMembers(), used);
+    const second = nameGroup(startupMembers(), used);
+    expect(first).toBe("Founder Mode");
+    expect(second).not.toBe("Founder Mode");
+    expect(typeof second).toBe("string");
+    expect(second.length).toBeGreaterThan(0);
+  });
 });

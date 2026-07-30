@@ -1,5 +1,6 @@
 import TabBar from "@/components/TabBar";
 import GuestBanner from "@/components/GuestBanner";
+import NotificationBell from "@/components/NotificationBell";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export default async function TabsLayout({
@@ -15,7 +16,12 @@ export default async function TabsLayout({
   return (
     <>
       {user?.is_anonymous && <GuestBanner />}
-      <main style={{ paddingBottom: 88 }}>{children}</main>
+      {user && !user.is_anonymous && (
+        <div className="notif-slot">
+          <NotificationBell />
+        </div>
+      )}
+      <main className="app-main">{children}</main>
       <TabBar />
     </>
   );

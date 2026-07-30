@@ -1,22 +1,26 @@
 @import "tailwindcss";
 
-/* ── Night Arrivals ───────────────────────────────────────────────────────
-   Committed dark identity: deep ink-navy ground, one warm persimmon signal.
-   Persimmon appears ONLY on actions and state, never as decoration. */
+/* ── Icebreaker ───────────────────────────────────────────────────────────
+   Frost-navy ground, one icy-cyan signal. Icy-cyan appears ONLY on actions
+   and state, never as decoration. --accent stays a flat color everywhere
+   (it's used in `color:` contexts ~80 places, which can't take a gradient);
+   --accent-grad is the one gradient token, reserved for filled primary-CTA
+   button backgrounds only. */
 :root {
   color-scheme: dark; /* native controls (date pickers etc.) follow the theme */
-  --bg: #0e1420;
-  --surface: #161d2b;
-  --line: #232c3d;
-  --ink: #f2f5fa;
-  --ink-2: #9aa7bd;
-  --ink-3: #828fa6;
-  --accent: #ff6a3d;
-  --accent-ink: #1a0f08;
+  --bg: #0a121c;
+  --surface: #121c29;
+  --line: #1c2733;
+  --ink: #f2f6fa;
+  --ink-2: #8ca0b8;
+  --ink-3: #5c7086;
+  --accent: #4fd1e8;
+  --accent-grad: linear-gradient(135deg, #7ce6f2, #2e9fc9);
+  --accent-ink: #06222b;
   --danger: #ff5470;
   --overlay: rgba(0, 0, 0, 0.62);
-  --glass: rgba(14, 20, 32, 0.72);
-  --glass-solid: #0e1420;
+  --glass: rgba(10, 18, 28, 0.72);
+  --glass-solid: #0a121c;
   --glass-line: rgba(255, 255, 255, 0.08);
 }
 
@@ -24,12 +28,13 @@
 :root[data-theme="light"] {
   color-scheme: light;
   --bg: #ffffff;
-  --surface: #f5f7fa;
-  --line: #e4e8ef;
+  --surface: #f2f8fa;
+  --line: #d8e9ed;
   --ink: #101625;
-  --ink-2: #56607a;
-  --ink-3: #5c6478;
-  --accent: #c0421a;
+  --ink-2: #3a4656;
+  --ink-3: #5c7086;
+  --accent: #0e7c99;
+  --accent-grad: linear-gradient(135deg, #2e9fc9, #0e7c99);
   --accent-ink: #ffffff;
   --danger: #d61f4a;
   --overlay: rgba(0, 0, 0, 0.4);
@@ -39,7 +44,7 @@
 }
 
 body {
-  font-family: var(--font-body), -apple-system, BlinkMacSystemFont,
+  font-family: var(--font-body), var(--font-kr), -apple-system, BlinkMacSystemFont,
     "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
   color: var(--ink);
   background: var(--bg);
@@ -52,7 +57,7 @@ body {
 h1,
 h2,
 h3 {
-  font-family: var(--font-display), -apple-system, "Apple SD Gothic Neo", sans-serif;
+  font-family: var(--font-display), var(--font-kr), -apple-system, "Apple SD Gothic Neo", sans-serif;
   text-wrap: balance;
   letter-spacing: -0.02em;
 }
@@ -81,7 +86,7 @@ h3 {
 
 /* ── Tab page masthead ─────────────────────────────────────────────────────
    Shared editorial header for the tab surfaces (matches home/rides):
-   persimmon kicker → display title → subtitle. */
+   icy-cyan kicker → display title → subtitle. */
 .page-head { margin-bottom: 20px; }
 .page-kicker {
   font-size: 12px; font-weight: 600; text-transform: uppercase;
@@ -96,8 +101,8 @@ h3 {
 
 /* ── Onboarding ────────────────────────────────────────────────────────────
    Shared so the 3 steps read as one editorial flow and match auth/chat:
-   persimmon kicker → display title → subtitle; de-boxed hairline inputs;
-   hairline rows, not cards. Persimmon stays on actions/state only. */
+   icy-cyan kicker → display title → subtitle; de-boxed hairline inputs;
+   hairline rows, not cards. Icy-cyan stays on actions/state only. */
 .ob-kicker {
   font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.08em; color: var(--accent);
@@ -123,7 +128,7 @@ h3 {
 .ob-field:focus { border-bottom-color: var(--accent); }
 .ob-field::placeholder { color: var(--ink-3); }
 
-/* Interest chip — hairline when off, persimmon fill only when on. */
+/* Interest chip — hairline when off, icy-cyan fill only when on. */
 .ob-chip {
   min-height: 40px; padding: 8px 14px; border-radius: 999px;
   font-size: 14px; font-weight: 500;
@@ -149,7 +154,7 @@ h3 {
 
 .ob-primary {
   flex: 1; min-height: 50px; border: 0; border-radius: 12px;
-  background: var(--accent); color: var(--accent-ink);
+  background: var(--accent-grad); color: var(--accent-ink);
   font-size: 16px; font-weight: 700; cursor: pointer;
   transition: opacity 150ms ease-out;
 }
@@ -164,3 +169,20 @@ h3 {
   background: none; border: none; padding: 0; cursor: pointer;
   color: var(--accent); font-size: 14px; font-weight: 600;
 }
+
+/* ── Responsive desktop layout ─────────────────────────────────────────────
+   Mobile stays the fixed-bottom-tabbar layout unchanged; >=1024px switches
+   to a left icon rail (TabBar.tsx) + reflows main content beside it instead
+   of below it. */
+.app-main { padding-bottom: 88px; }
+@media (min-width: 1024px) {
+  .app-main { padding-bottom: 0; padding-left: 64px; }
+}
+
+/* NotificationBell's fixed position — top-right on every breakpoint. An
+   earlier version tried to tuck it into the left rail's column on desktop
+   (bottom: 84px, guessed to sit just above 마이페이지), but that offset was
+   never actually anchored to the rail's real layout and drifted out of
+   place. Top-right never collides with a left-side rail at any width, so
+   it stays put instead of chasing a second, fragile position. */
+.notif-slot { position: fixed; top: 8px; right: 8px; z-index: 55; }

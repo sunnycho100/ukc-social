@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
+import { getConference } from "@/lib/conference";
 import GroupReveal from "@/components/GroupReveal";
 
 export default async function GroupPage({
@@ -9,11 +10,12 @@ export default async function GroupPage({
 }) {
   const { id } = await params;
   const { user, supabase } = await requireUser();
+  const conference = await getConference(supabase);
 
   // RLS restricts groups/group_members to members — a non-member gets null → 404.
   const { data: group } = await supabase
     .from("groups")
-    .select("id, name, rationale, suggested_place, meet_time, slot_id, slot:slots(title, starts_at, area)")
+    .select("id, name, rationale, starter_question, meet_time, slot_id, slot:slots(title, starts_at, area)")
     .eq("id", id)
     .maybeSingle();
   if (!group) notFound();
@@ -45,13 +47,14 @@ export default async function GroupPage({
       groupId={group.id}
       name={group.name}
       rationale={group.rationale}
-      suggestedPlace={group.suggested_place}
+      starterQuestion={group.starter_question}
       meetTime={group.meet_time}
       slotTitle={slot?.title ?? ""}
       slotStartsAt={slot?.starts_at ?? null}
       slotArea={slot?.area ?? ""}
       members={members}
       meId={user.id}
+      timezone={conference?.timezone}
     />
   );
 }

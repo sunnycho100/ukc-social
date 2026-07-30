@@ -34,7 +34,11 @@ const firstUnused = (pool: string[], used: Set<string>) => pool.find((n) => !use
 // Name one group. `used` accumulates names already taken in this batch (dedupe).
 export function nameGroup(members: NameableMember[], used: Set<string> = new Set()): string {
   const n = members.length;
-  const majority = Math.ceil(n / 2);
+  // BUG FIX: Math.ceil(0/2) is 0, and every category's hit-count (also 0) trivially
+  // satisfies `hits >= majority` when majority is 0 — an empty group used to get a
+  // confident vibe/field name (e.g. "Send It") with zero members backing it. Floor
+  // majority at 1 so an empty (or interest-less) group always falls through to "mixed".
+  const majority = Math.max(1, Math.ceil(n / 2));
 
   // 1. A shared vibe interest (climbing / coffee / startups) held by most members wins.
   for (const [interest, pool] of Object.entries(VIBE)) {

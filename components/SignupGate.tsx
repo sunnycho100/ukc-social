@@ -1,38 +1,31 @@
 import Link from "next/link";
 
 // Shown in place of a write surface when an anonymous guest tries to act.
-// `next` carries the gated destination through signup so the user lands back on
-// what they were trying to do, not on a generic home screen.
-export default function SignupGate({
-  title,
-  blurb,
-  next,
-}: {
-  title: string;
-  blurb: string;
-  next?: string;
-}) {
-  const href = next ? `/login?next=${encodeURIComponent(next)}` : "/login";
-
+export default function SignupGate({ title, blurb }: { title: string; blurb: string }) {
   return (
     <section style={{ padding: "24px 20px 48px", maxWidth: 460, margin: "0 auto" }}>
-      <header className="page-head">
-        <p className="page-kicker">Members only</p>
-        <h1 className="page-title">{title}</h1>
-        <p className="page-sub">{blurb}</p>
-      </header>
-      <p style={{ marginTop: 10, fontSize: 14, color: "var(--ink-3)", lineHeight: 1.5, maxWidth: "40ch" }}>
-        Creating an account takes a few seconds. You can keep looking around either way.
+      <div className="eyebrow" style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--accent)" }}>
+        Members only
+      </div>
+      <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 10, lineHeight: 1.05, textWrap: "balance" }}>
+        {title}
+      </h1>
+      <p style={{ marginTop: 12, fontSize: 15, color: "var(--ink-2)", lineHeight: 1.5, maxWidth: "40ch" }}>
+        {blurb} Creating an account takes a few seconds. You can keep looking around either way.
       </p>
       <Link
-        href={href}
-        className="ob-primary"
+        href="/login"
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          display: "block",
+          textAlign: "center",
           marginTop: 24,
-          textDecoration: "none",
+          minHeight: 50,
+          lineHeight: "50px",
+          borderRadius: 12,
+          background: "var(--accent-grad)",
+          color: "var(--accent-ink)",
+          fontSize: 16,
+          fontWeight: 700,
         }}
       >
         Create your account

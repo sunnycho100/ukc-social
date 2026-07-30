@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
+import { getConference } from "@/lib/conference";
 import Chat from "@/components/Chat";
 
 export default async function GroupChatPage({
@@ -9,14 +10,24 @@ export default async function GroupChatPage({
 }) {
   const { id } = await params;
   const { user, supabase } = await requireUser();
+  const conference = await getConference(supabase);
 
   // RLS gives members-only access — a non-member gets null → 404.
   const { data: group } = await supabase
     .from("groups")
-    .select("id, name, suggested_place, meet_time")
+    .select("id, name, starter_question, meet_time")
     .eq("id", id)
     .maybeSingle();
   if (!group) notFound();
+
+  // Opening the thread marks it read — powers the unread badge on /chat's index.
+  // Non-fatal: a failed upsert just leaves the badge stale, not a broken page.
+  await supabase
+    .from("message_reads")
+    .upsert(
+      { user_id: user.id, group_id: group.id, last_read_at: new Date().toISOString() },
+      { onConflict: "user_id,group_id" },
+    );
 
   // The roster: who a member is talking to. Seeds the header, empty state,
   // and per-message avatars so nobody is an anonymous bubble.
@@ -39,8 +50,9 @@ export default async function GroupChatPage({
       groupId={group.id}
       groupName={group.name}
       members={members}
-      meetPlace={group.suggested_place ?? null}
+      starterQuestion={group.starter_question ?? null}
       meetTime={group.meet_time ?? null}
+      timezone={conference?.timezone}
     />
   );
 }

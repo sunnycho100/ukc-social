@@ -3,14 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import type { Slot, Signup } from "./MealsList";
 
-const dtf = new Intl.DateTimeFormat("en-US", {
-  weekday: "long",
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-  timeZone: "America/New_York",
-});
+const fmtWhen = (timezone: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
 
 const PARTY: { label: string; val: number }[] = [
   { label: "Just me", val: 1 },
@@ -27,17 +28,34 @@ export default function JoinSheet({
   onClose,
   onJoin,
   onLeave,
+  timezone = "America/New_York",
 }: {
   slot: Slot;
   joined: boolean;
   signup?: Signup;
   closed: boolean;
   onClose: () => void;
-  onJoin: (slotId: string, partySize: number, notes: string) => void;
+  onJoin: (
+    slotId: string,
+    partySize: number,
+    notes: string,
+    confirmed?: boolean,
+  ) => Promise<{ ok: boolean; error?: string }>;
   onLeave: (slotId: string) => void;
+  timezone?: string;
 }) {
+  const dtf = fmtWhen(timezone);
   const [partySize, setPartySize] = useState<number>(signup?.partySize ?? 1);
   const [notes, setNotes] = useState(signup?.notes ?? "");
+  const [busy, setBusy] = useState(false);
+  const [scheduleWarning, setScheduleWarning] = useState(false);
+
+  async function handlePrimary() {
+    setBusy(true);
+    const res = await onJoin(slot.id, partySize, notes, scheduleWarning);
+    setBusy(false);
+    if (!res.ok && res.error === "schedule_conflict") setScheduleWarning(true);
+  }
 
   const sheetRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<Element | null>(null);
@@ -134,8 +152,27 @@ export default function JoinSheet({
               placeholder="Anything your table should know? (optional)"
             />
 
-            <button className="btn-primary" onClick={() => onJoin(slot.id, partySize, notes)}>
-              {joined ? "Save changes" : "Join"}
+            <div className="reveal-note">
+              <p className="reveal-when">Tables revealed {dtf.format(new Date(slot.join_deadline))}</p>
+              <p className="reveal-sub">You&apos;ll know your table and plan before dinner.</p>
+            </div>
+
+            {scheduleWarning && (
+              <div className="schedule-warn">
+                <p className="schedule-warn__text">
+                  You&apos;re leaving before this one — still join?
+                </p>
+              </div>
+            )}
+
+            <button className="btn-primary" onClick={handlePrimary} disabled={busy}>
+              {busy
+                ? "Saving…"
+                : scheduleWarning
+                  ? "Join anyway"
+                  : joined
+                    ? "Save changes"
+                    : "Join"}
             </button>
 
             {joined && (
@@ -239,11 +276,28 @@ export default function JoinSheet({
           outline: none;
           border-bottom-color: var(--accent);
         }
+        .reveal-note {
+          margin-top: 18px;
+          padding: 12px 14px;
+          border-radius: 12px;
+          background: color-mix(in srgb, var(--accent) 8%, transparent);
+          border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+        }
+        .reveal-when { font-size: 13px; font-weight: 600; color: var(--accent); margin: 0; }
+        .reveal-sub { font-size: 12px; color: var(--ink-2); margin: 4px 0 0; }
+        .schedule-warn {
+          margin-top: 12px;
+          padding: 12px 14px;
+          border-radius: 12px;
+          background: color-mix(in srgb, var(--danger) 10%, transparent);
+          border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+        }
+        .schedule-warn__text { font-size: 13px; font-weight: 600; color: var(--danger); margin: 0; }
         .btn-primary {
           width: 100%;
           margin-top: 24px;
           border: none;
-          background: var(--accent);
+          background: var(--accent-grad);
           color: var(--accent-ink);
           font-size: 16px;
           font-weight: 700;

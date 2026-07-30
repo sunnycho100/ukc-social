@@ -1,15 +1,18 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
+import { toLocalInput } from "@/lib/rides";
+import { getConference } from "@/lib/conference";
 import SignupGate from "@/components/SignupGate";
 import ProfileEditor from "@/components/ProfileEditor";
 
-const slotFmt = new Intl.DateTimeFormat("en-US", {
-  weekday: "short",
-  hour: "numeric",
-  minute: "2-digit",
-  timeZone: "America/New_York",
-});
+const fmtSlot = (timezone: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
 
 const one = <T,>(v: T | T[] | null | undefined): T | null =>
   Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
@@ -21,10 +24,12 @@ export default async function MePage() {
       <SignupGate
         title="Create your profile"
         blurb="Save your photo, interests, and details so we can seat and match you well."
-        next="/me"
       />
     );
   }
+
+  const conference = await getConference(supabase);
+  const slotFmt = fmtSlot(conference?.timezone ?? "America/New_York");
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -50,15 +55,39 @@ export default async function MePage() {
     .map((r: any) => one<{ id: string; name: string }>(r.group))
     .filter((g: any): g is { id: string; name: string } => !!g);
 
+  // flights table may not exist yet on a fresh DB — degrade to no flights set.
+  const { data: flightRows } = await supabase
+    .from("flights")
+    .select("direction, scheduled_at")
+    .eq("user_id", user.id);
+  const arrivalFlight = (flightRows ?? []).find((f) => f.direction === "arrival");
+  const departureFlight = (flightRows ?? []).find((f) => f.direction === "departure");
+  const timezone = conference?.timezone ?? "America/New_York";
+  // Conference dates as a starting point when nothing's saved yet — a blank
+  // datetime-local input means setting year/month/day/hour/minute from
+  // scratch, same reasoning as onboarding's StepPlans.
+  const flightDefaults = {
+    arrival: conference ? `${toLocalInput(conference.starts_at, timezone).slice(0, 10)}T12:00` : "",
+    departure: conference ? `${toLocalInput(conference.ends_at, timezone).slice(0, 10)}T12:00` : "",
+  };
+
   return (
     <section style={{ padding: "24px 20px" }}>
       <header className="page-head">
-        <p className="page-kicker">UKC 2026</p>
+        <p className="page-kicker">{conference?.name ?? "Icebreaker"}</p>
         <h1 className="page-title">Me</h1>
         <p className="page-sub">Your profile, dinners, and tables.</p>
       </header>
 
-      <ProfileEditor userId={user.id} initial={profile} />
+      <ProfileEditor
+        userId={user.id}
+        initial={profile}
+        initialFlight={{
+          arrival: arrivalFlight ? toLocalInput(arrivalFlight.scheduled_at, timezone) : "",
+          departure: departureFlight ? toLocalInput(departureFlight.scheduled_at, timezone) : "",
+        }}
+        flightDefaults={flightDefaults}
+      />
 
       <div style={{ marginTop: 36 }}>
         <h2 className="sec-h">My dinners</h2>

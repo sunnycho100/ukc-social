@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import Wordmark from "@/components/Wordmark";
 
 export default function ResetPage() {
   const router = useRouter();
@@ -43,8 +44,9 @@ export default function ResetPage() {
         margin: "0 auto",
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/logo.png" alt="UKC Social" height={64} width={149} style={{ display: "block", marginBottom: 20 }} />
+      <div style={{ marginBottom: 20 }}>
+        <Wordmark />
+      </div>
 
       {ready === false ? (
         <div style={{ padding: "18px 20px", border: "1px solid var(--line)", borderRadius: 14, background: "var(--surface)" }}>
@@ -80,7 +82,7 @@ export default function ResetPage() {
               disabled={busy || ready === null || password.length < 6}
               style={{
                 width: "100%", minHeight: 50, marginTop: 18, border: 0, borderRadius: 12,
-                background: "var(--accent)", color: "var(--accent-ink)",
+                background: "var(--accent-grad)", color: "var(--accent-ink)",
                 fontSize: 16, fontWeight: 700, cursor: "pointer",
                 opacity: busy || ready === null || password.length < 6 ? 0.5 : 1,
               }}

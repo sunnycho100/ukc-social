@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m ' *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/home)",
+      "Bash(disown)",
+      "Bash(curl -s -o /dev/null -w \"home:%{http_code}\\\\n\" http://localhost:3000/home)",
+      "Bash(curl -s -o /dev/null -w \"meals:%{http_code}\\\\n\" http://localhost:3000/meals)",
+      "Bash(curl -s -o /dev/null -w \"people:%{http_code}\\\\n\" http://localhost:3000/people)"
+    ]
+  }
+}

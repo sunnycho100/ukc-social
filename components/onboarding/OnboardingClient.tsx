@@ -3,40 +3,65 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { saveProfile, setDinnerSignups } from "@/app/actions/profile";
+import { submitFlight } from "@/app/actions/flights";
+import type { Conference } from "@/lib/conference";
+import StepEvent, { type EventChoice } from "./StepEvent";
 import StepBasics from "./StepBasics";
 import StepInterests from "./StepInterests";
-import StepPlans from "./StepPlans";
+import StepContact from "./StepContact";
+import StepPlans, { type Flight } from "./StepPlans";
+
+const TOTAL_STEPS = 5;
 
 type Data = {
+  eventId: EventChoice | "";
+  stayStart: string;
+  stayEnd: string;
   name: string;
   school: string;
   position: string;
   birthday: string;
   photo_url: string;
   interests: string[];
+  bio: string;
+  kakao: string;
+  linkedin: string;
   slotIds: string[];
+  flight: Flight;
 };
 
-export default function OnboardingClient({ userId }: { userId: string }) {
+export default function OnboardingClient({
+  userId,
+  conference,
+}: {
+  userId: string;
+  conference: Conference | null;
+}) {
   const router = useRouter();
   const params = useSearchParams();
-  const step = Math.min(3, Math.max(1, Number(params.get("step")) || 1));
+  const step = Math.min(TOTAL_STEPS, Math.max(1, Number(params.get("step")) || 1));
 
   const EMPTY: Data = {
+    eventId: "",
+    stayStart: "",
+    stayEnd: "",
     name: "",
     school: "",
     position: "",
     birthday: "",
     photo_url: "",
     interests: [],
+    bio: "",
+    kakao: "",
+    linkedin: "",
     slotIds: [],
+    flight: { arrival: "", departure: "" },
   };
   // Draft survives a refresh / backgrounded tab (only `step` is in the URL).
-  // Same localStorage idiom StepPlans already uses for flight info.
   const [data, setData] = useState<Data>(() => {
     if (typeof window === "undefined") return EMPTY;
     try {
-      const raw = localStorage.getItem("ukc-onboarding");
+      const raw = localStorage.getItem("onboarding-draft");
       return raw ? { ...EMPTY, ...JSON.parse(raw) } : EMPTY;
     } catch {
       return EMPTY;
@@ -47,7 +72,7 @@ export default function OnboardingClient({ userId }: { userId: string }) {
 
   useEffect(() => {
     try {
-      localStorage.setItem("ukc-onboarding", JSON.stringify(data));
+      localStorage.setItem("onboarding-draft", JSON.stringify(data));
     } catch {
       /* quota / private mode — draft just won't persist */
     }
@@ -70,11 +95,22 @@ export default function OnboardingClient({ userId }: { userId: string }) {
     setError("");
     const a = await saveProfile({ dinners_wanted: data.slotIds });
     const b = await setDinnerSignups(data.slotIds);
+    // Flights are optional — just a time each way, matching is by time
+    // window anyway (see lib/rides.ts / Board.tsx). Only submit whichever
+    // was actually entered, and don't block finishing onboarding if it
+    // fails (same non-fatal pattern as everything else here; editable
+    // anytime on Me).
+    if (data.flight.arrival) {
+      await submitFlight({ direction: "arrival", localDateTime: data.flight.arrival });
+    }
+    if (data.flight.departure) {
+      await submitFlight({ direction: "departure", localDateTime: data.flight.departure });
+    }
     setBusy(false);
     if (!a.ok || !b.ok)
       return setError(a.error ?? b.error ?? "Could not finish");
     try {
-      localStorage.removeItem("ukc-onboarding");
+      localStorage.removeItem("onboarding-draft");
     } catch {
       /* ignore */
     }
@@ -95,12 +131,12 @@ export default function OnboardingClient({ userId }: { userId: string }) {
       <div
         role="progressbar"
         aria-valuemin={1}
-        aria-valuemax={3}
+        aria-valuemax={TOTAL_STEPS}
         aria-valuenow={step}
-        aria-label={`Step ${step} of 3`}
+        aria-label={`Step ${step} of ${TOTAL_STEPS}`}
         style={{ display: "flex", gap: 6, marginBottom: 28 }}
       >
-        {[1, 2, 3].map((s) => (
+        {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((s) => (
           <span
             key={s}
             aria-hidden
@@ -116,12 +152,34 @@ export default function OnboardingClient({ userId }: { userId: string }) {
       </div>
 
       {step === 1 && (
+        <StepEvent
+          conference={conference}
+          eventId={data.eventId}
+          stayStart={data.stayStart}
+          stayEnd={data.stayEnd}
+          onChange={patch}
+          busy={busy}
+          error={error}
+          onContinue={() =>
+            save(
+              {
+                event_id: data.eventId === "attending" ? (conference?.id ?? null) : null,
+                stay_start: data.stayStart || null,
+                stay_end: data.stayEnd || null,
+              },
+              2,
+            )
+          }
+        />
+      )}
+      {step === 2 && (
         <StepBasics
           userId={userId}
           value={data}
           onChange={patch}
           busy={busy}
           error={error}
+          onBack={() => goto(1)}
           onContinue={() =>
             save(
               {
@@ -131,29 +189,51 @@ export default function OnboardingClient({ userId }: { userId: string }) {
                 birthday: data.birthday || null,
                 photo_url: data.photo_url,
               },
-              2,
+              3,
             )
           }
         />
       )}
-      {step === 2 && (
+      {step === 3 && (
         <StepInterests
           value={data.interests}
           onChange={(interests) => patch({ interests })}
           busy={busy}
           error={error}
-          onBack={() => goto(1)}
-          onContinue={() => save({ interests: data.interests }, 3)}
+          onBack={() => goto(2)}
+          onContinue={() => save({ interests: data.interests }, 4)}
         />
       )}
-      {step === 3 && (
+      {step === 4 && (
+        <StepContact
+          value={data}
+          onChange={patch}
+          busy={busy}
+          error={error}
+          onBack={() => goto(3)}
+          onContinue={() =>
+            save(
+              {
+                bio: data.bio.trim(),
+                kakao: data.kakao.trim(),
+                linkedin: data.linkedin.trim(),
+              },
+              5,
+            )
+          }
+        />
+      )}
+      {step === 5 && (
         <StepPlans
           value={data.slotIds}
           onChange={(slotIds) => patch({ slotIds })}
+          flight={data.flight}
+          onFlightChange={(flight) => patch({ flight })}
           busy={busy}
           error={error}
-          onBack={() => goto(2)}
+          onBack={() => goto(4)}
           onFinish={finish}
+          conference={conference}
         />
       )}
     </main>

@@ -1,13 +1,20 @@
-# UKC Social
+# Icebreaker
 
 A conference companion for **UKC 2026** (Aug 5–8, ChampionsGate FL). Attendees make a
-quick profile, join a dinner slot, and get matched into small tables by shared interests —
-solo or as a pre-formed group. Contacts unlock only for people you actually share a table
-(or ride) with.
+quick profile — including which event they're at and how long they're staying — join a
+dinner slot, and get matched into small tables by shared interests, solo or as a pre-formed
+group. They can browse who else is around (with an "arriving early / staying late / same
+dates as you" badge and a light "Say hi") and post their flight to find someone to split an
+airport ride with. Contacts unlock only for people you actually share a meal table with.
 
-**Three pillars:** profiles/directory · AI meal matching · airport ride pooling (Plan 2).
-**Design:** "Precision" — white ground, navy ink (`#0A2540`), a single blurple accent
-(`#635BFF`), system font, glass bottom tab bar. Korean-safe throughout.
+**Pillars:** profiles/directory (with stay-window "Say hi") · AI meal matching · airport
+ride coordination. *(Mentor 1:1 matching is descoped for now — see `docs/HANDOFF.md` —
+the algorithm still lives in `lib/mentorMatch.ts` but isn't wired to a route.)*
+**Design:** "Icebreaker" — a Frozen-inspired frost-navy ground (`#0A121C`), a single
+icy-cyan accent (`#4FD1E8`, gradient on filled primary buttons only) used only on
+actions/state, de-boxed editorial layout (hairline dividers instead of cards, underline
+inputs), Inter display/body + Noto Sans KR fallback. Korean-safe throughout. Dev/demo data
+(`scripts/seed-fake.ts`) uses Frozen-universe names as placeholder profiles.
 
 > **Heads up on Next.js:** this repo pins a Next.js version with breaking changes from what
 > you may remember — APIs, conventions, and file structure can differ from older docs. Read
@@ -16,9 +23,12 @@ solo or as a pre-formed group. Contacts unlock only for people you actually shar
 
 ## Stack
 
-- **Next.js 15** (App Router, TypeScript, Tailwind v4) — route groups `(tabs)` and `(auth)`.
+- **Next.js 16** (App Router, TypeScript, Tailwind v4) — route groups `(tabs)` and `(auth)`.
 - **Supabase** — Postgres, Auth (magic-link), Realtime, Storage (avatars), Row Level Security.
-- **Anthropic** `claude-sonnet-5` for meal matching, with a deterministic round-robin fallback.
+- **Anthropic** `claude-sonnet-5` for meal matching (with a deterministic round-robin fallback)
+  and for reading flight-ticket screenshots on Rides. Group *names* come from a deterministic
+  bank (`lib/groupName.ts`, `data/group-names.json`), not the LLM — see
+  `docs/group-naming-logic.md`.
 - **vitest** for unit tests.
 
 ## Setup
@@ -39,7 +49,11 @@ solo or as a pre-formed group. Contacts unlock only for people you actually shar
 | `SUPABASE_SERVICE_ROLE_KEY` | Service-role key — admin matching only, server-side |
 | `ANTHROPIC_API_KEY` | Meal matching. Without it, matching uses the round-robin fallback |
 | `ADMIN_EMAIL` | The one email allowed to run matching at `/admin` |
-| `AERODATABOX_API_KEY` | Optional. Live airport arrivals on Rides (AeroDataBox via RapidAPI). Without it, Rides shows the bundled Aug-4 MCO example |
+| `GEMINI_API_KEY` | Optional. Bespoke Claude/Gemini group names. Without it, the deterministic bank in `data/group-names.json` is used (this is already the default path — see `docs/group-naming-logic.md`) |
+
+> `AERODATABOX_API_KEY` and `lib/flights.ts`'s `fetchArrivals()`/`bucketIntoPools()` are no
+> longer wired into any page — Rides now runs on self-reported flights (`/rides/add`, with
+> optional Claude screenshot parsing) instead of a live arrivals feed. Candidate for cleanup.
 
 ## Database
 
@@ -53,6 +67,12 @@ re-apply all of them:
 | `0003_fix_group_members_rls.sql` | `is_group_member()` security-definer (fixes RLS recursion) |
 | `0004_realtime_messages.sql` | adds `messages` to the realtime publication |
 | `0005_party_size.sql` | `signups.party_size` (come-as-a-group); drops old `group_size_pref` |
+| `0006_flights_mentor.sql` | `flights` table (self-reported arrival/departure, powers Rides) + `profiles.mentor_optin` |
+| `0007_birthday.sql` | `profiles.birthday` (optional, collected during onboarding) |
+| `0008_profiles_contact_rls.sql` | **Security fix.** Tightens `profiles` SELECT so only the owner or someone who shares a channel with them can read a row — closes a gap where any signed-in user (including guests) could read anyone's kakao/linkedin/dietary/birthday directly, bypassing the app's "contacts unlock only when you share a table" gate. Apply this one promptly. |
+| `0009_event_stay.sql` | `profiles.event_id`/`stay_start`/`stay_end` (onboarding's Event & stay step) + adds the stay columns to `directory_profiles` |
+| `0010_hi_requests.sql` | `hi_requests` table + RLS — People's "Say hi" request, deliberately not wired into `shares_channel()` |
+| `0011_ride_join.sql` | Links `ride_pools` to `flights` (`anchor_flight_id`) + adds the missing insert policy — Rides' "Share" now really joins a pool (capacity 4, closes once full) instead of being a client-only stub |
 
 Apply via the Supabase dashboard SQL editor (paste each file, Run), or the Supabase CLI.
 
@@ -77,6 +97,8 @@ See the running deploy checklist in [`docs/HANDOFF.md`](docs/HANDOFF.md#deploy-t
 
 - `docs/HANDOFF.md` — build status, DB state, deploy checklist, human TODOs.
 - `docs/UX-GAP-AUDIT.md` — prioritized conference-goer gap list.
+- `docs/group-naming-logic.md` — how tables get playful names instead of "Table N".
+- `docs/mentor-match-logic.md` — mentor/mentee role derivation and pairing logic.
 - `docs/superpowers/specs/` — design specs (product spec, party-size).
 
 ---
@@ -113,15 +135,29 @@ Home (/home)  ◀─────────────────────
    │
    ├─▶ People (/people)  directory → tap a person → contacts (locked until you share a table)
    │
-   ├─▶ Rides (/rides)    airport pooling (Plan 2 — teaching placeholder for now)
+   ├─▶ Mentor (/mentor)  role (mentor/mentee) derived from position → opt in → daily 1:1 match
+   │
+   ├─▶ Rides (/rides)    post your arrival/departure flight (or screenshot a boarding pass —
+   │                     Claude prefills it) → board of others near your time → "Share"
+   │                     (UI-only stub today: no backend row, no contact unlock yet)
    │
    └─▶ Me (/me)          profile view/edit, my dinners, my tables, sign out
 ```
 
 **Matching:** an admin opens `/admin` and runs matching for a slot. Signups are packed into
 tables of 4–6 *by headcount* — a party of 3 always sits together and merges with, say, a
-party of 2 into a table of 5. Claude writes each table's name + "why you matched" rationale;
-if no API key is set, a round-robin fallback produces correct tables with a generic rationale.
+party of 2 into a table of 5. Claude writes each table's "why you matched" rationale and a
+suggested place; if no API key is set (or validation fails), a round-robin fallback produces
+correct tables with a generic rationale. Table *names* always come from the deterministic
+bank in `lib/groupName.ts`, keyed off the group's shared interests/field.
+
+**Mentor matching:** role (mentor vs. mentee) is derived from the free-text `position` field
+(PhD/postdoc/industry titles → mentor, student titles → mentee). Opting in at `/mentor` adds
+you to the daily 1:1 pool; matching logic lives in `lib/mentorMatch.ts`.
 
 **Contact unlock:** KakaoTalk / LinkedIn are hidden in the directory until you and the other
-person share a group (or ride), enforced in the DB by `can_see_contact()` / `shares_channel()`.
+person share a *meal group* **or a ride pool**, enforced in the DB by `can_see_contact()` /
+`shares_channel()`. Since `0011`, joining someone's flight on Rides writes a real
+`ride_members` row (capacity 4, same table `shares_channel()` already checked but nothing
+used to populate), so people who share a ride now unlock contacts too — same mechanism as
+sharing a table, no extra code needed for it.

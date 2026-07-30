@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { sayHi } from "@/app/actions/hi";
+import { stayRelation, STAY_LABEL, type StayWindow } from "@/lib/stay";
 
 export type Person = {
   id: string;
@@ -11,6 +13,8 @@ export type Person = {
   position: string;
   interests: string[];
   bio: string;
+  stay_start?: string | null;
+  stay_end?: string | null;
 };
 
 function initials(name: string) {
@@ -49,17 +53,29 @@ type Contacts =
   | { state: "locked" }
   | { state: "unlocked"; kakao: string; linkedin: string };
 
+type StayFilter = "all" | "early" | "late" | "same";
+
 export default function PeopleBrowser({
   people,
   meId,
+  isGuest,
+  myStay,
+  hiSent,
 }: {
   people: Person[];
   meId: string;
+  isGuest: boolean;
+  myStay: StayWindow;
+  hiSent: string[];
 }) {
   const [query, setQuery] = useState("");
   const [activeInterest, setActiveInterest] = useState<string | null>(null);
+  const [activeSchool, setActiveSchool] = useState<string | null>(null);
+  const [activeStay, setActiveStay] = useState<StayFilter>("all");
   const [openId, setOpenId] = useState<string | null>(null);
   const [contacts, setContacts] = useState<Contacts>({ state: "loading" });
+  const [sentIds, setSentIds] = useState<Set<string>>(() => new Set(hiSent));
+  const [hiErrorId, setHiErrorId] = useState<string | null>(null);
 
   const sheetRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<Element | null>(null);
@@ -101,16 +117,28 @@ export default function PeopleBrowser({
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [people]);
 
+  const allSchools = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of people) if (p.school.trim()) set.add(p.school.trim());
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [people]);
+
+  const relationOf = (p: Person) =>
+    stayRelation({ start: p.stay_start, end: p.stay_end }, myStay);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return people.filter((p) => {
       if (activeInterest && !p.interests.includes(activeInterest)) return false;
+      if (activeSchool && p.school !== activeSchool) return false;
+      if (activeStay !== "all" && relationOf(p) !== activeStay) return false;
       if (!q) return true;
       return (
         p.name.toLowerCase().includes(q) || p.school.toLowerCase().includes(q)
       );
     });
-  }, [people, query, activeInterest]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [people, query, activeInterest, activeSchool, activeStay, myStay]);
 
   const active = people.find((p) => p.id === openId) ?? null;
 
@@ -128,7 +156,7 @@ export default function PeopleBrowser({
         <p style={{ fontSize: 17, fontWeight: 600, marginTop: 16 }}>You&apos;re early</p>
         <p style={{ fontSize: 14, color: "var(--ink-2)", marginTop: 6, lineHeight: 1.5 }}>
           No one else has set up a profile yet. Check back soon. This fills up as
-          people arrive for UKC 2026.
+          people arrive.
         </p>
       </div>
     );
@@ -161,6 +189,27 @@ export default function PeopleBrowser({
     });
   }
 
+  async function handleSayHi(id: string) {
+    setHiErrorId(null);
+    setSentIds((s) => new Set(s).add(id));
+    const res = await sayHi(id);
+    if (!res.ok) {
+      setSentIds((s) => {
+        const next = new Set(s);
+        next.delete(id);
+        return next;
+      });
+      setHiErrorId(id);
+    }
+  }
+
+  const STAY_FILTERS: { id: StayFilter; label: string }[] = [
+    { id: "all", label: "All" },
+    { id: "early", label: "Arriving early" },
+    { id: "late", label: "Staying late" },
+    { id: "same", label: "Same dates" },
+  ];
+
   return (
     <div>
       <input
@@ -170,6 +219,27 @@ export default function PeopleBrowser({
         aria-label="Search people"
         className="ppl-search"
       />
+
+      <div className="chip-row" role="group" aria-label="Filter by stay window">
+        {STAY_FILTERS.map((f) => {
+          const on = activeStay === f.id;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              aria-pressed={on}
+              onClick={() => setActiveStay(f.id)}
+              className={on ? "fchip fchip--on" : "fchip"}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
+      <p style={{ fontSize: 12, color: "var(--ink-3)", margin: "4px 0 4px", lineHeight: 1.5 }}>
+        Say hi to anyone whose stay overlaps yours — full contacts still unlock only once
+        you share a table or ride.
+      </p>
 
       {allInterests.length > 0 && (
         <div className="chip-row">
@@ -190,6 +260,25 @@ export default function PeopleBrowser({
         </div>
       )}
 
+      {allSchools.length > 0 && (
+        <div className="chip-row">
+          {allSchools.map((school) => {
+            const on = activeSchool === school;
+            return (
+              <button
+                key={school}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setActiveSchool(on ? null : school)}
+                className={on ? "fchip fchip--on" : "fchip"}
+              >
+                {school}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div style={{ padding: "40px 0", textAlign: "center" }}>
           <p style={{ color: "var(--ink-2)", fontSize: 15 }}>
@@ -200,6 +289,8 @@ export default function PeopleBrowser({
             onClick={() => {
               setQuery("");
               setActiveInterest(null);
+              setActiveSchool(null);
+              setActiveStay("all");
             }}
             style={{
               marginTop: 14,
@@ -215,40 +306,70 @@ export default function PeopleBrowser({
           </button>
         </div>
       ) : (
-        <div>
-          {filtered.map((person) => (
-            <button
-              key={person.id}
-              type="button"
-              onClick={() => openSheet(person)}
-              className="person-row"
-            >
-              <Avatar person={person} size={48} />
-              <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span
-                    style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)" }}
-                  >
-                    {person.name || "Someone"}
-                  </span>
-                  {person.id === meId && <span className="you-tag">You</span>}
-                </div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: "var(--ink-2)",
-                    marginTop: 3,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
+        <div className="ppl-grid">
+          {filtered.map((person) => {
+            const rel = relationOf(person);
+            const isMe = person.id === meId;
+            const sent = sentIds.has(person.id);
+            const noOverlap = rel === "no-overlap";
+            return (
+              <div key={person.id} className="person-row">
+                <button
+                  type="button"
+                  onClick={() => openSheet(person)}
+                  className="person-info"
                 >
-                  {[person.school, person.position].filter(Boolean).join(" · ") ||
-                    "Not set"}
-                </div>
+                  <Avatar person={person} size={48} />
+                  <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span
+                        style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)" }}
+                      >
+                        {person.name || "Someone"}
+                      </span>
+                      {isMe && <span className="you-tag">You</span>}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "var(--ink-2)",
+                        marginTop: 3,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {[person.school, person.position].filter(Boolean).join(" · ") ||
+                        "Not set"}
+                    </div>
+                    {rel && !isMe && <div className="stay-badge">{STAY_LABEL[rel]}</div>}
+                  </div>
+                </button>
+                {!isMe && isGuest && (
+                  <div className="say-hi-col">
+                    <a href="/login" className="say-hi-btn say-hi-guest">
+                      Sign up to say hi
+                    </a>
+                  </div>
+                )}
+                {!isMe && !isGuest && (
+                  <div className="say-hi-col">
+                    <button
+                      type="button"
+                      className="say-hi-btn"
+                      disabled={sent || noOverlap}
+                      onClick={() => handleSayHi(person.id)}
+                    >
+                      {sent ? "Said hi ✓" : "Say hi"}
+                    </button>
+                    <span className="say-hi-lock">
+                      {hiErrorId === person.id ? "Couldn't send — try again" : "🔒 contact locked"}
+                    </span>
+                  </div>
+                )}
               </div>
-            </button>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -416,14 +537,78 @@ export default function PeopleBrowser({
         .person-row {
           display: flex;
           align-items: center;
-          gap: 14px;
+          gap: 10px;
           width: 100%;
           padding: 14px 0;
           border-bottom: 1px solid var(--line);
-          background: none;
-          cursor: pointer;
         }
         .person-row:last-child { border-bottom: none; }
+        /* Desktop web layout: single-column hairline list -> 3-col card grid.
+           Same data/rows, just laid out as cards instead of dividers. */
+        @media (min-width: 1024px) {
+          .ppl-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+          }
+          .person-row {
+            align-items: flex-start;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 16px;
+          }
+          .person-row:last-child { border-bottom: 1px solid var(--line); }
+        }
+        .person-info {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          flex: 1;
+          min-width: 0;
+          background: none;
+          border: none;
+          cursor: pointer;
+          text-align: left;
+        }
+        .stay-badge {
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--accent);
+          margin-top: 4px;
+        }
+        .say-hi-col {
+          flex-shrink: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 4px;
+        }
+        .say-hi-btn {
+          flex-shrink: 0;
+          min-height: 32px;
+          padding: 0 12px;
+          border-radius: 999px;
+          border: 1px solid var(--accent);
+          background: none;
+          color: var(--accent);
+          font-size: 12px;
+          font-weight: 700;
+          white-space: nowrap;
+          cursor: pointer;
+        }
+        .say-hi-btn:disabled {
+          opacity: 0.5;
+          cursor: default;
+        }
+        .say-hi-guest {
+          display: inline-flex;
+          align-items: center;
+          text-decoration: none;
+        }
+        .say-hi-lock {
+          font-size: 10px;
+          color: var(--ink-3);
+        }
         .you-tag {
           font-size: 11px;
           font-weight: 700;

@@ -39,6 +39,15 @@ describe("jaccard", () => {
     expect(jaccard([], [])).toBe(0); // both empty → 0, not NaN
     expect(jaccard(["a"], ["b"])).toBe(0);
   });
+
+  it("de-dupes repeated tags before computing the union (a duplicate isn't double-counted)", () => {
+    // Without de-duping, ["a","a","b"] could inflate the union to 3 instead of 2.
+    expect(jaccard(["a", "a", "b"], ["a"])).toBeCloseTo(1 / 2);
+  });
+
+  it("ignores blank/whitespace-only tags", () => {
+    expect(jaccard(["a", "  ", ""], ["a"])).toBe(1);
+  });
 });
 
 describe("pairType", () => {
@@ -111,6 +120,20 @@ describe("assignMentees", () => {
     const out = assignMentees(people, { mentorCapacity: 1 });
     expect(out.length).toBe(1); // only one seat
   });
+
+  it("returns nothing when there are no mentors at all", () => {
+    const people = [P("s1", "undergrad"), P("s2", "masters")];
+    expect(assignMentees(people)).toEqual([]);
+  });
+
+  it("returns nothing when there are no mentees at all", () => {
+    const people = [P("m1", "phd"), P("m2", "industry")];
+    expect(assignMentees(people)).toEqual([]);
+  });
+
+  it("returns nothing for an empty roster", () => {
+    expect(assignMentees([])).toEqual([]);
+  });
 });
 
 describe("suggestGroups", () => {
@@ -164,5 +187,26 @@ describe("suggestGroups", () => {
     // With floor 0, everything can fuse (3 pairs → one group of 4 + one duo).
     const nofloor = suggestGroups(assignments, people, { affinityFloor: 0 });
     expect(nofloor.some((g) => g.memberIds.length === 4)).toBe(true);
+  });
+
+  it("returns nothing for an empty assignment list", () => {
+    expect(suggestGroups([], [])).toEqual([]);
+  });
+
+  it("treats the affinity floor as inclusive (affinity === floor still fuses)", () => {
+    const people = [
+      P("m1", "phd", { field: "CS", researchArea: "CV" }),
+      P("s1", "undergrad", { field: "CS", researchArea: "CV" }),
+      P("m2", "phd", { field: "CS", researchArea: "CV" }),
+      P("s2", "undergrad", { field: "CS", researchArea: "CV" }),
+    ];
+    const assignments = assignMentees(people, { mentorCapacity: 1 });
+    // Discover the exact affinity these two pairs fuse at (floor 0 always fuses),
+    // then re-run with that exact value as the floor — `affinity < floor` should
+    // exclude nothing when they're equal, so the pairs should still fuse.
+    const [{ affinity }] = suggestGroups(assignments, people, { affinityFloor: 0 });
+    const atFloor = suggestGroups(assignments, people, { affinityFloor: affinity });
+    expect(atFloor.length).toBe(1);
+    expect(atFloor[0].memberIds.length).toBe(4);
   });
 });

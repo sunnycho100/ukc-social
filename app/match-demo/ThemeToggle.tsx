@@ -8,7 +8,7 @@ export default function ThemeToggle() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
-    const saved = localStorage.getItem("ukc-theme") === "light" ? "light" : "dark";
+    const saved = localStorage.getItem("theme") === "light" ? "light" : "dark";
     setTheme(saved);
     document.documentElement.dataset.theme = saved;
   }, []);
@@ -17,7 +17,7 @@ export default function ThemeToggle() {
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
     document.documentElement.dataset.theme = next;
-    localStorage.setItem("ukc-theme", next);
+    localStorage.setItem("theme", next);
   }
 
   return (

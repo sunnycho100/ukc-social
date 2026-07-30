@@ -4,13 +4,19 @@ import Anthropic from "@anthropic-ai/sdk";
 export type SignupProfile = { userId: string; name: string; school: string;
   position: string; interests: string[]; partySize?: number; notes?: string };
 export type MatchGroup = { memberIds: string[]; name: string; rationale: string;
-  suggestedPlace: string };
+  starterQuestion: string };
 
 // A table's "size" is its total headcount — the sum of each member's party_size,
 // not the number of signup rows. A signup that comes with 2 friends weighs 3.
 const sizeOf = (id: string, sizes?: Map<string, number>) => sizes?.get(id) ?? 1;
 const headcountOf = (ids: string[], sizes?: Map<string, number>) =>
   ids.reduce((n, id) => n + sizeOf(id, sizes), 0);
+
+// Only ever set by roundRobinGroups() — the LLM's prompt asks for a warm,
+// specific rationale, so it never coincidentally produces this exact string.
+// Used to tell an LLM-matched group from a round-robin/repacked one after
+// the fact, without threading a separate provenance field through everywhere.
+export const ROUND_ROBIN_RATIONALE = "Grouped to keep tables even.";
 
 export function validateAssignment(signupIds: string[],
   groups: { memberIds: string[] }[], min = 4, max = 6, sizes?: Map<string, number>) {
@@ -57,7 +63,49 @@ export function roundRobinGroups(signups: SignupProfile[], target = 5): MatchGro
   return bins
     .filter(b => b.ids.length > 0 || bins.length === 1)
     .map((b, i) => ({ memberIds: b.ids, name: `Table ${i + 1}`,
-      rationale: "Grouped to keep tables even.", suggestedPlace: "" }));
+      rationale: ROUND_ROBIN_RATIONALE, starterQuestion: "" }));
+}
+
+// Keeps whatever groups are already valid from a failed attempt and only
+// re-packs the ones that aren't, instead of discarding the entire slot.
+// A broken partition (duplicated or missing signups) can't be trusted at the
+// group level — there's no reliable way to tell which groups are "real" when
+// the LLM has literally lost or duplicated a user, so that case still repacks
+// everyone. Oversize-only failures (a clean partition, some tables just too
+// big) repack just the flagged groups' members.
+export function repackInvalid(
+  groups: MatchGroup[],
+  signupIds: string[],
+  signups: SignupProfile[],
+  min = 4,
+  max = 6,
+  sizes?: Map<string, number>,
+): MatchGroup[] {
+  const validation = validateAssignment(signupIds, groups, min, max, sizes);
+  if (validation.ok) return groups;
+  if (validation.dupes.length || validation.missing.length) return roundRobinGroups(signups);
+
+  const bad = new Set(validation.oversize);
+  const valid = groups.filter((_, i) => !bad.has(i));
+  const invalidIds = new Set(groups.flatMap((g, i) => (bad.has(i) ? g.memberIds : [])));
+  const invalidSignups = signups.filter(s => invalidIds.has(s.userId));
+  return [...valid, ...roundRobinGroups(invalidSignups)];
+}
+
+// Pure + exported so the prompt text is unit-testable without hitting the
+// Anthropic API. `eventName` comes from the admin-registered `conferences`
+// row (lib/conference.ts) — generic fallback if unset. No `location`/place:
+// where to actually meet is left to the group, not invented by the LLM —
+// see docs/HANDOFF.md for why (an earlier version asked for a "suggested
+// cuisine near X," which produced ungrounded, sometimes nonsensical results
+// with no real venue data behind it).
+export function buildMatchPrompt(
+  roster: unknown,
+  opts: { min: number; max: number; eventName?: string },
+): string {
+  const { min, max, eventName } = opts;
+  const event = eventName || "conference";
+  return `Group these ${event} attendees into dinner tables by shared research interests and vibe. Each table must seat ${min}-${max} people TOTAL. IMPORTANT: an attendee with "comesWithGroupOf": N arrives with a party of N people (including themselves) — count them as N seats and keep that whole party at one table. Every attendee appears in EXACTLY one group. Give each group a short fun name, a one-sentence "why you matched" rationale (warm, specific, mention shared interests), and a fun icebreaker question the table could open with — grounded in what they actually have in common, not generic small talk.\n\nAttendees:\n${JSON.stringify(roster, null, 1)}`;
 }
 
 const TOOL = {
@@ -68,22 +116,25 @@ const TOOL = {
     properties: { groups: { type: "array", items: { type: "object", properties: {
       memberIds: { type: "array", items: { type: "string" } },
       name: { type: "string" }, rationale: { type: "string" },
-      suggestedPlace: { type: "string" } },
-      required: ["memberIds", "name", "rationale", "suggestedPlace"] } } },
+      starterQuestion: { type: "string" } },
+      required: ["memberIds", "name", "rationale", "starterQuestion"] } } },
     required: ["groups"] },
 };
 
 export async function matchSlot(signups: SignupProfile[],
-  opts: { min?: number; max?: number; model?: string } = {}): Promise<MatchGroup[]> {
-  const { min = 4, max = 6, model = "claude-sonnet-5" } = opts;
+  opts: { min?: number; max?: number; model?: string; eventName?: string } = {}): Promise<MatchGroup[]> {
+  const { min = 4, max = 6, model = "claude-sonnet-5", eventName } = opts;
+  // Nothing to match — skip the API call for a trivially empty roster. Every
+  // *real* slot (however small) still runs the interest-aware LLM path below;
+  // round-robin is reserved for genuine failure, not "small headcount."
+  if (signups.length === 0) return roundRobinGroups(signups);
   const sizes = new Map(signups.map(s => [s.userId, s.partySize ?? 1]));
-  const total = headcountOf(signups.map(s => s.userId), sizes);
-  if (total <= max) return roundRobinGroups(signups);
   const client = new Anthropic();
   const ids = signups.map(s => s.userId);
   const roster = signups.map(s => (s.partySize ?? 1) > 1
     ? { ...s, comesWithGroupOf: s.partySize } : s);
-  const prompt = `Group these UKC 2026 conference attendees into dinner tables by shared research interests and vibe. Each table must seat ${min}-${max} people TOTAL. IMPORTANT: an attendee with "comesWithGroupOf": N arrives with a party of N people (including themselves) — count them as N seats and keep that whole party at one table. Every attendee appears in EXACTLY one group. Give each group a short fun name, a one-sentence "why you matched" rationale (warm, specific, mention shared interests), and a suggested cuisine near ChampionsGate FL (Korean options welcome).\n\nAttendees:\n${JSON.stringify(roster, null, 1)}`;
+  const prompt = buildMatchPrompt(roster, { min, max, eventName });
+  let lastGroups: MatchGroup[] | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const res = await client.messages.create({ model, max_tokens: 4096,
       tools: [TOOL], tool_choice: { type: "tool", name: "submit_groups" },
@@ -92,7 +143,12 @@ export async function matchSlot(signups: SignupProfile[],
     if (call && call.type === "tool_use") {
       const groups = (call.input as { groups: MatchGroup[] }).groups;
       if (validateAssignment(ids, groups, min, max, sizes).ok) return groups;
+      lastGroups = groups; // keep the last attempt around in case both fail
     }
   }
-  return roundRobinGroups(signups); // ponytail: LLM twice then deterministic fallback
+  // ponytail: after 2 tries, keep whatever tables were already valid from the
+  // last attempt and only re-pack the ones that weren't, rather than discard
+  // the whole slot. Falls all the way back to round-robin if no attempt ever
+  // returned a usable tool call at all.
+  return lastGroups ? repackInvalid(lastGroups, ids, signups, min, max, sizes) : roundRobinGroups(signups);
 }

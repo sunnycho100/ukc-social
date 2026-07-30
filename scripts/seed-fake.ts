@@ -8,14 +8,20 @@ const svc = createClient(
   { auth: { persistSession: false } },
 );
 
+// Frozen-universe cast, standing in as mock profiles — see
+// "Icebreaker Design Guide.dc.html" for the naming glossary this follows.
 const NAMES = [
-  "민서 Park", "Jiwoo Kim", "David Lee", "하은 Choi", "Ethan Cho",
-  "서준 Kang", "Grace Yoon", "지호 Han", "Alex Moon", "유나 Lim",
-  "Brian Seo", "수아 Jung", "Kevin Nam", "예준 Oh", "Sarah Bae",
-  "도윤 Shin", "Chris Im", "하윤 Song", "Rachel Ko", "시우 Hwang",
+  "Anna", "Kristoff", "Elsa", "Olaf", "Sven",
+  "Hans", "Honeymaren", "Ryder", "Mattias", "Yelena",
+  "Grand Pabbie", "Bulda", "Oaken", "Iduna", "Agnarr",
+  "Gerda", "Kai", "Marshmallow", "Gale", "Bruni",
 ];
-const SCHOOLS = ["UW–Madison", "UMD", "GT", "UIUC", "UT Austin", "Purdue", "UMich", "Stanford"];
-const POSITIONS = ["PhD student", "MS student", "Postdoc", "Undergrad"];
+const SCHOOLS = [
+  "Arendelle Castle", "Ice Harvesters Guild", "North Mountain Keep", "Snowgies Division",
+  "North Mountain Guides", "Northuldra Reindeer Riders", "Arendelle Royal Guard",
+  "Troll Valley", "Oaken's Trading Post", "Enchanted Forest",
+];
+const POSITIONS = ["Royal Diplomat", "Mountain Guide", "Ice Magic Systems", "Field Captain", "Elder Relations"];
 const INTERESTS = [
   "Robotics", "Perception", "NLP / Agents", "Computer Vision", "HCI", "RL",
   "Bioengineering", "Materials", "Energy", "Semiconductors", "국밥 crew",

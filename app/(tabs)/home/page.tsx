@@ -2,20 +2,24 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase/server";
+import { getConference } from "@/lib/conference";
+import Wordmark from "@/components/Wordmark";
 
 const HOUR = 3600_000;
 
-const timeFmt = new Intl.DateTimeFormat("en-US", {
-  hour: "numeric",
-  minute: "2-digit",
-  timeZone: "America/New_York",
-});
-const dateFmt = new Intl.DateTimeFormat("en-US", {
-  weekday: "long",
-  month: "long",
-  day: "numeric",
-  timeZone: "America/New_York",
-});
+const fmtTime = (timezone: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
+const fmtDate = (timezone: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: timezone,
+  });
 
 const ms = (s: string) => new Date(s).getTime();
 const one = <T,>(v: T | T[] | null | undefined): T | null =>
@@ -26,28 +30,48 @@ type Slot = { id: string; title: string; starts_at: string; area: string; join_d
 type Group = {
   id: string;
   name: string;
-  suggested_place: string;
+  rationale: string;
+  starter_question: string;
   meet_time: string | null;
   slot: Slot | null;
+};
+type TableMember = {
+  id: string;
+  name: string;
+  photo_url: string | null;
+  school: string;
+  position: string;
+  interests: string[];
+};
+type TableCard = {
+  groupId: string;
+  tableName: string;
+  starterQuestion: string;
+  slot: Slot;
+  members: TableMember[];
 };
 
 export default async function HomePage() {
   const { user, supabase } = await requireUser();
-  if (user.is_anonymous) return <GuestHomeSection />;
+  const conference = await getConference(supabase);
+  if (user.is_anonymous) return <GuestHomeSection conferenceName={conference?.name} />;
   const now = Date.now();
+  const timeFmt = fmtTime(conference?.timezone ?? "America/New_York");
+  const dateFmt = fmtDate(conference?.timezone ?? "America/New_York");
 
   const { data: prof } = await supabase
     .from("profiles")
-    .select("name")
+    .select("name, interests")
     .eq("id", user.id)
     .maybeSingle();
   if (!prof) redirect("/welcome");
   const profile = { name: prof.name ?? "" };
+  const myInterests = new Set(((prof.interests as string[]) ?? []).map((i) => i.toLowerCase()));
 
   const { data: groupRows } = await supabase
     .from("group_members")
     .select(
-      "group:groups(id, name, suggested_place, meet_time, slot:slots(id, title, starts_at, area, join_deadline))",
+      "group:groups(id, name, rationale, starter_question, meet_time, slot:slots(id, title, starts_at, area, join_deadline))",
     )
     .eq("user_id", user.id);
 
@@ -128,37 +152,81 @@ export default async function HomePage() {
   const fl = await supabase.from("flights").select("id").eq("user_id", user.id).limit(1);
   if (!fl.error && fl.data && fl.data.length) hasFlight = true;
 
+  // 친구 tab shows only people you actually share a group with — not the full
+  // directory (that's "Meet other participants", which links to /people and
+  // its full stay/interest/school filtering). One card per table (not a
+  // flattened dedup list), so it's clear which slot each group is from —
+  // and if only one table shows up, it's because matching's only actually
+  // been run for one of your joined slots so far, not a bug.
+  const groupIds = myGroups.map((g) => g.id);
+  let tables: TableCard[] = [];
+  if (groupIds.length) {
+    const { data: memberRows } = await supabase
+      .from("group_members")
+      .select(
+        "group_id, profile:directory_profiles(id, name, photo_url, school, position, interests)",
+      )
+      .in("group_id", groupIds);
+    const membersByGroup = new Map<string, TableMember[]>();
+    for (const r of (memberRows ?? []) as { group_id: string; profile: TableMember | TableMember[] | null }[]) {
+      const p = one<TableMember>(r.profile);
+      if (!p || p.id === user.id) continue; // show tablemates, not yourself
+      const list = membersByGroup.get(r.group_id) ?? [];
+      list.push(p);
+      membersByGroup.set(r.group_id, list);
+    }
+    tables = myGroups
+      .map((g) => ({
+        groupId: g.id,
+        tableName: g.name,
+        starterQuestion: g.starter_question,
+        slot: g.slot!,
+        members: membersByGroup.get(g.id) ?? [],
+      }))
+      .sort((a, b) => ms(a.slot.starts_at) - ms(b.slot.starts_at));
+  }
+
   return (
     <section style={{ padding: "24px 20px" }}>
       <header style={{ marginBottom: 24 }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png" alt="UKC Social" height={44} width={102} style={{ display: "block" }} />
+        <Wordmark size="sm" />
         <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 6 }}>
           {dateFmt.format(new Date(now))}
         </div>
       </header>
 
       {dayOf && nextGroup ? (
-        <DayOf group={nextGroup} names={memberNames} />
+        <DayOf group={nextGroup} names={memberNames} timeFmt={timeFmt} />
       ) : nextGroup ? (
-        <Revealed group={nextGroup} names={memberNames} />
+        <Revealed
+          group={nextGroup}
+          names={memberNames}
+          timezone={conference?.timezone ?? "America/New_York"}
+        />
       ) : nextSignup ? (
-        <JoinedWaiting slot={nextSignup} count={waitingCount} />
+        <JoinedWaiting slot={nextSignup} count={waitingCount} timeFmt={timeFmt} />
       ) : (
-        <Fresh name={profile.name} />
+        <Fresh name={profile.name} conferenceName={conference?.name} />
       )}
 
       <FillInHub dinner={dinnerDone ? null : dinnerHook} hasFlight={hasFlight} />
+
+      <GroupmatesSection
+        tables={tables}
+        myInterests={myInterests}
+        timezone={conference?.timezone ?? "America/New_York"}
+      />
+
       <LinkStyles />
     </section>
   );
 }
 
-function Fresh({ name }: { name: string }) {
+function Fresh({ name, conferenceName }: { name: string; conferenceName?: string }) {
   const greeting = name.trim() ? `Hey ${firstName(name)}` : "Welcome";
   return (
     <div>
-      <div className="eyebrow">UKC 2026</div>
+      <div className="eyebrow">{conferenceName ?? "Icebreaker"}</div>
       <h1 style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-0.03em", marginTop: 10, lineHeight: 1 }}>
         {greeting}
       </h1>
@@ -210,7 +278,7 @@ function FillInHub({
     rows.push(
       <NudgeRow
         key="rides"
-        href="/rides/add"
+        href="/me"
         icon={ICONS.ride}
         title="Split a ride from the airport"
         benefit="$60 alone. About $20 each when you share."
@@ -222,6 +290,114 @@ function FillInHub({
     <div style={{ marginTop: 32 }}>
       <div className="hub-head">Line these up</div>
       <div className="hub-list">{rows}</div>
+    </div>
+  );
+}
+
+function initials(name: string) {
+  const p = name.trim().split(/\s+/).filter(Boolean);
+  return ((p[0]?.[0] ?? "") + (p[1]?.[0] ?? "")).toUpperCase() || "·";
+}
+
+// One card per table — only people you actually share a group with. The
+// full, filterable directory lives behind "Meet other participants" (->
+// /people). Deliberately one card per group (not a flattened people list),
+// so it's obvious which slot/table each is from — and if only one card
+// shows even though you joined several dinners, that's because matching's
+// only actually been run for one of those slots so far, not a bug.
+function GroupmatesSection({
+  tables,
+  myInterests,
+  timezone,
+}: {
+  tables: TableCard[];
+  myInterests: Set<string>;
+  timezone: string;
+}) {
+  const fmt = fmtTime(timezone);
+  const dfmt = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: timezone,
+  });
+
+  return (
+    <div style={{ marginTop: 32 }}>
+      <div className="hub-head">Your tables</div>
+      {tables.length === 0 ? (
+        <p style={{ fontSize: 14, color: "var(--ink-2)", marginTop: 8 }}>
+          No one yet — join a dinner and get matched to see your tablemates here.
+        </p>
+      ) : (
+        tables.map((t) => (
+          <div key={t.groupId} className="table-card">
+            <div className="table-card__head">
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>{t.tableName}</div>
+                <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 2 }}>
+                  {t.slot.title} · {dfmt.format(new Date(t.slot.starts_at))} ·{" "}
+                  {fmt.format(new Date(t.slot.starts_at))}
+                  {t.slot.area ? ` · ${t.slot.area}` : ""}
+                </div>
+                {t.starterQuestion && (
+                  <div style={{ fontSize: 13, color: "var(--accent)", marginTop: 6, lineHeight: 1.4 }}>
+                    💬 {t.starterQuestion}
+                  </div>
+                )}
+              </div>
+              <Link href={`/groups/${t.groupId}/chat`} className="table-card__chat">
+                Chat
+              </Link>
+            </div>
+
+            {t.members.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 10 }}>
+                Just you so far — more may join before tables lock in.
+              </p>
+            ) : (
+              t.members.map((p) => {
+                const shared = p.interests.filter((i) => myInterests.has(i.toLowerCase()));
+                return (
+                  <div key={p.id} className="mate-row">
+                    <div
+                      aria-hidden
+                      className="mate-avatar"
+                      style={
+                        p.photo_url
+                          ? { background: `center/cover no-repeat url("${p.photo_url}")` }
+                          : undefined
+                      }
+                    >
+                      {!p.photo_url && initials(p.name)}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>{p.name}</div>
+                      <div style={{ fontSize: 13, color: "var(--ink-2)" }}>
+                        {[p.school, p.position].filter(Boolean).join(" · ") || "—"}
+                      </div>
+                      {shared.length > 0 ? (
+                        <div style={{ fontSize: 13, marginTop: 3 }}>
+                          <span style={{ color: "var(--ink-3)" }}>you both like </span>
+                          <span style={{ color: "var(--accent)", fontWeight: 600 }}>
+                            {shared.join(", ")}
+                          </span>
+                        </div>
+                      ) : (
+                        p.interests.length > 0 && (
+                          <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 3 }}>
+                            into {p.interests.join(", ")}
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ))
+      )}
     </div>
   );
 }
@@ -264,7 +440,15 @@ function NudgeRow({
   );
 }
 
-function JoinedWaiting({ slot, count }: { slot: Slot; count: number }) {
+function JoinedWaiting({
+  slot,
+  count,
+  timeFmt,
+}: {
+  slot: Slot;
+  count: number;
+  timeFmt: Intl.DateTimeFormat;
+}) {
   return (
     <div>
       <div className="eyebrow">You&apos;re in</div>
@@ -288,8 +472,8 @@ function JoinedWaiting({ slot, count }: { slot: Slot; count: number }) {
             )}
           </div>
           <div style={{ fontSize: 14, color: "var(--ink-2)", marginTop: 10 }}>
-            <strong style={{ color: "var(--ink)" }}>{count}</strong>{" "}
-            {count === 1 ? "person is" : "people are"} in so far.
+            <strong style={{ color: "var(--ink)" }}>{count}</strong> of Arendelle are in so
+            far.
           </div>
         </div>
       )}
@@ -310,18 +494,55 @@ function JoinedWaiting({ slot, count }: { slot: Slot; count: number }) {
   );
 }
 
-function Revealed({ group, names }: { group: Group; names: string[] }) {
+function Revealed({
+  group,
+  names,
+  timezone,
+}: {
+  group: Group;
+  names: string[];
+  timezone: string;
+}) {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
+  const when = group.slot
+    ? [dtf.format(new Date(group.meet_time ?? group.slot.starts_at)), group.slot.area]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
   return (
     <div>
       <div className="eyebrow">Your table is set</div>
       <h1 style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-0.03em", marginTop: 10, lineHeight: 1 }}>
         {group.name}
       </h1>
+      {when && <p style={{ fontSize: 15, color: "var(--ink-2)", marginTop: 10 }}>{when}</p>}
       {names.length > 0 && (
-        <p style={{ fontSize: 15, color: "var(--ink-2)", marginTop: 12 }}>{names.join(", ")}</p>
+        <p style={{ fontSize: 15, color: "var(--ink-2)", marginTop: 8 }}>{names.join(", ")}</p>
       )}
-      {group.suggested_place && (
-        <p style={{ fontSize: 14, color: "var(--ink-2)", marginTop: 6 }}>📍 {group.suggested_place}</p>
+      {group.starter_question && (
+        <p style={{ fontSize: 14, color: "var(--ink)", marginTop: 6, lineHeight: 1.4, maxWidth: "42ch" }}>
+          💬 {group.starter_question}
+        </p>
+      )}
+      {group.rationale && (
+        <p
+          style={{
+            fontSize: 14,
+            color: "var(--accent)",
+            marginTop: 12,
+            lineHeight: 1.5,
+            maxWidth: "42ch",
+          }}
+        >
+          {group.rationale}
+        </p>
       )}
       <Link href={`/groups/${group.id}`} className="cta-line">
         Meet your table <span aria-hidden>▸</span>
@@ -330,7 +551,15 @@ function Revealed({ group, names }: { group: Group; names: string[] }) {
   );
 }
 
-function DayOf({ group, names }: { group: Group; names: string[] }) {
+function DayOf({
+  group,
+  names,
+  timeFmt,
+}: {
+  group: Group;
+  names: string[];
+  timeFmt: Intl.DateTimeFormat;
+}) {
   const meet = group.meet_time ?? group.slot?.starts_at ?? null;
   return (
     <div>
@@ -338,15 +567,20 @@ function DayOf({ group, names }: { group: Group; names: string[] }) {
       <h1 style={{ fontSize: 48, fontWeight: 800, letterSpacing: "-0.03em", marginTop: 10, lineHeight: 1 }}>
         {meet ? timeFmt.format(new Date(meet)) : "Soon"}
       </h1>
-      {group.suggested_place && (
-        <p style={{ fontSize: 17, color: "var(--ink)", marginTop: 8, fontWeight: 600 }}>
-          📍 {group.suggested_place}
+      {group.starter_question && (
+        <p style={{ fontSize: 16, color: "var(--ink)", marginTop: 8, fontWeight: 600, lineHeight: 1.4 }}>
+          💬 {group.starter_question}
         </p>
       )}
       <p style={{ fontSize: 14, color: "var(--ink-2)", marginTop: 10 }}>
         {group.name}
         {names.length ? ` · ${names.join(", ")}` : ""}
       </p>
+      {group.rationale && (
+        <p style={{ fontSize: 13, color: "var(--accent)", marginTop: 8, lineHeight: 1.5, maxWidth: "42ch" }}>
+          {group.rationale}
+        </p>
+      )}
       <Link
         href={`/groups/${group.id}/chat`}
         style={{
@@ -368,10 +602,10 @@ function DayOf({ group, names }: { group: Group; names: string[] }) {
 }
 
 // Home for an anonymous guest: no personal data, just what signing up unlocks.
-function GuestHomeSection() {
+function GuestHomeSection({ conferenceName }: { conferenceName?: string }) {
   return (
     <section style={{ padding: "24px 20px" }}>
-      <div className="eyebrow">UKC 2026</div>
+      <div className="eyebrow">{conferenceName ?? "Icebreaker"}</div>
       <h1 style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-0.03em", marginTop: 10, lineHeight: 1 }}>
         Look around
       </h1>
@@ -454,6 +688,52 @@ function LinkStyles() {
         margin-bottom: 2px;
       }
       .hub-list { border-bottom: 1px solid var(--line); }
+      .table-card {
+        margin-top: 12px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+      }
+      .table-card + .table-card { margin-top: 12px; }
+      .table-card__head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .table-card__chat {
+        flex-shrink: 0;
+        min-height: 32px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--accent);
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .mate-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-top: 1px solid var(--line);
+        margin-top: 10px;
+      }
+      .mate-avatar {
+        flex-shrink: 0;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--ink-2);
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        font-weight: 600;
+        overflow: hidden;
+      }
     `}</style>
   );
 }

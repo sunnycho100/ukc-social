@@ -1,5 +1,5 @@
 // lib/mentorMatch.ts
-// Interest-based mentor–mentee matchmaking for UKC Social.
+// Interest-based mentor–mentee matchmaking for conference attendees.
 // Pure + deterministic so it can be TDD'd and dumped to a CSV for tuning.
 //
 // Pipeline: classify → scorePair (every pair) → assignMentees (1:1, capped)

@@ -16,6 +16,7 @@ export default function StepBasics({
   value,
   onChange,
   onContinue,
+  onBack,
   busy,
   error,
 }: {
@@ -23,6 +24,7 @@ export default function StepBasics({
   value: Basics;
   onChange: (p: Partial<Basics>) => void;
   onContinue: () => void;
+  onBack: () => void;
   busy: boolean;
   error: string;
 }) {
@@ -54,7 +56,7 @@ export default function StepBasics({
 
   return (
     <>
-      <span className="ob-kicker">Set up · 1 of 3</span>
+      <span className="ob-kicker">Set up · 2 of 5</span>
       <h1 className="ob-title">Let&apos;s set you up</h1>
       <p className="ob-sub">Takes under a minute.</p>
 
@@ -160,15 +162,19 @@ export default function StepBasics({
         <p style={{ color: "var(--danger)", fontSize: 14, marginTop: 16 }}>{error}</p>
       )}
 
-      <button
-        type="button"
-        className="ob-primary"
-        onClick={onContinue}
-        disabled={!nameValid || busy || upload === "uploading"}
-        style={{ marginTop: 28 }}
-      >
-        {busy ? "Saving…" : "Continue"}
-      </button>
+      <div style={{ display: "flex", gap: 12, marginTop: 28 }}>
+        <button type="button" className="ob-back" onClick={onBack}>
+          Back
+        </button>
+        <button
+          type="button"
+          className="ob-primary"
+          onClick={onContinue}
+          disabled={!nameValid || busy || upload === "uploading"}
+        >
+          {busy ? "Saving…" : "Continue"}
+        </button>
+      </div>
     </>
   );
 }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { downscale } from "@/lib/avatar";
 import { saveProfile } from "@/app/actions/profile";
+import { submitFlight, deleteFlight } from "@/app/actions/flights";
 
 type Profile = {
   name: string;
@@ -18,9 +19,21 @@ type Profile = {
   photo_url: string | null;
 };
 
+type Flight = { arrival: string; departure: string };
+
 function initials(name: string) {
   const p = name.trim().split(/\s+/).filter(Boolean);
   return ((p[0]?.[0] ?? "") + (p[1]?.[0] ?? "")).toUpperCase() || "·";
+}
+
+// Flight values are bare "YYYY-MM-DDTHH:mm" (no offset) — already the
+// conference-local wall clock (see toLocalInput), so a plain locale format
+// reads them back correctly without re-applying a timezone.
+function fmtFlight(v: string): string | null {
+  if (!v) return null;
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 function Label({ children }: { children: React.ReactNode }) {
@@ -30,14 +43,22 @@ function Label({ children }: { children: React.ReactNode }) {
 export default function ProfileEditor({
   userId,
   initial,
+  initialFlight,
+  flightDefaults,
 }: {
   userId: string;
   initial: Profile;
+  initialFlight: Flight;
+  flightDefaults: Flight;
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Profile>(initial);
+  const [flight, setFlight] = useState<Flight>({
+    arrival: initialFlight.arrival || flightDefaults.arrival,
+    departure: initialFlight.departure || flightDefaults.departure,
+  });
   const [custom, setCustom] = useState("");
   const [busy, setBusy] = useState(false);
   const [upload, setUpload] = useState<"idle" | "uploading" | "error">("idle");
@@ -45,6 +66,7 @@ export default function ProfileEditor({
   const [error, setError] = useState("");
 
   const set = (p: Partial<Profile>) => setForm((f) => ({ ...f, ...p }));
+  const setF = (p: Partial<Flight>) => setFlight((f) => ({ ...f, ...p }));
 
   function flash(msg: string) {
     setToast(msg);
@@ -85,24 +107,36 @@ export default function ProfileEditor({
     }
     setError("");
     setBusy(true);
-    const res = await saveProfile({
-      name: form.name.trim(),
-      school: form.school,
-      position: form.position,
-      interests: form.interests,
-      bio: form.bio,
-      kakao: form.kakao,
-      linkedin: form.linkedin,
-      dietary: form.dietary,
-      photo_url: form.photo_url ?? undefined,
-    });
+    const [profileRes, arrivalRes, departureRes] = await Promise.all([
+      saveProfile({
+        name: form.name.trim(),
+        school: form.school,
+        position: form.position,
+        interests: form.interests,
+        bio: form.bio,
+        kakao: form.kakao,
+        linkedin: form.linkedin,
+        dietary: form.dietary,
+        photo_url: form.photo_url ?? undefined,
+      }),
+      flight.arrival
+        ? submitFlight({ direction: "arrival", localDateTime: flight.arrival })
+        : initialFlight.arrival
+          ? deleteFlight("arrival")
+          : Promise.resolve({ ok: true as const, error: undefined as string | undefined }),
+      flight.departure
+        ? submitFlight({ direction: "departure", localDateTime: flight.departure })
+        : initialFlight.departure
+          ? deleteFlight("departure")
+          : Promise.resolve({ ok: true as const, error: undefined as string | undefined }),
+    ]);
     setBusy(false);
-    if (res.ok) {
+    if (profileRes.ok && arrivalRes.ok && departureRes.ok) {
       setEditing(false);
       flash("Saved");
       router.refresh();
     } else {
-      setError(res.error ?? "Couldn't save. Try again.");
+      setError(profileRes.error ?? arrivalRes.error ?? departureRes.error ?? "Couldn't save. Try again.");
     }
   }
 
@@ -158,6 +192,14 @@ export default function ProfileEditor({
         {form.bio && (
           <p style={{ fontSize: 15, color: "var(--ink)", marginTop: 14, lineHeight: 1.5 }}>
             {form.bio}
+          </p>
+        )}
+
+        {(fmtFlight(flight.arrival) || fmtFlight(flight.departure)) && (
+          <p style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 14 }}>
+            ✈ {fmtFlight(flight.arrival) ? `Landing ${fmtFlight(flight.arrival)}` : "No arrival set"}
+            {" · "}
+            {fmtFlight(flight.departure) ? `Leaving ${fmtFlight(flight.departure)}` : "No departure set"}
           </p>
         )}
 
@@ -288,6 +330,35 @@ export default function ProfileEditor({
         placeholder="Vegetarian, halal, allergies…"
       />
 
+      <Label>Flights</Label>
+      <p style={{ fontSize: 12, color: "var(--ink-2)", marginTop: -2, marginBottom: 4 }}>
+        Just the time — matched with others flying near the same window on{" "}
+        <a href="/rides" style={{ color: "var(--accent)", fontWeight: 600 }}>
+          Rides
+        </a>
+        .
+      </p>
+      <label className="ob-label" htmlFor="pe-arrival" style={{ marginTop: 8 }}>
+        Landing
+      </label>
+      <input
+        id="pe-arrival"
+        type="datetime-local"
+        className="ob-field"
+        value={flight.arrival}
+        onChange={(e) => setF({ arrival: e.target.value })}
+      />
+      <label className="ob-label" htmlFor="pe-departure">
+        Leaving
+      </label>
+      <input
+        id="pe-departure"
+        type="datetime-local"
+        className="ob-field"
+        value={flight.departure}
+        onChange={(e) => setF({ departure: e.target.value })}
+      />
+
       {error && <p style={{ color: "var(--danger)", fontSize: 14, marginTop: 16 }}>{error}</p>}
 
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
@@ -295,6 +366,10 @@ export default function ProfileEditor({
           type="button"
           onClick={() => {
             setForm(initial);
+            setFlight({
+              arrival: initialFlight.arrival || flightDefaults.arrival,
+              departure: initialFlight.departure || flightDefaults.departure,
+            });
             setEditing(false);
             setError("");
           }}
@@ -385,7 +460,7 @@ function PeStyles() {
         border-radius: 12px;
         font-size: 16px;
         font-weight: 700;
-        background: var(--accent);
+        background: var(--accent-grad);
         color: var(--accent-ink);
         border: none;
         transition: opacity 180ms ease-out;

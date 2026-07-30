@@ -1,23 +1,38 @@
 "use server";
 
 import { requireUser } from "@/lib/supabase/server";
+import { isEligibleForSlot } from "@/lib/scheduleFilter";
 
 type Result = { ok: boolean; error?: string };
 
 export async function joinSlot(
   slotId: string,
-  opts: { partySize?: number; notes?: string },
+  opts: { partySize?: number; notes?: string; confirmed?: boolean },
 ): Promise<Result> {
   const { user, supabase } = await requireUser();
 
   const { data: slot } = await supabase
     .from("slots")
-    .select("join_deadline")
+    .select("join_deadline, starts_at")
     .eq("id", slotId)
     .single();
   if (!slot) return { ok: false, error: "not_found" };
   if (new Date(slot.join_deadline).getTime() <= Date.now()) {
     return { ok: false, error: "closed" };
+  }
+
+  // Front-line schedule check: someone whose stay doesn't cover this slot's
+  // date gets a warning, not a silent join — matchOneSlot (app/actions/admin.ts)
+  // enforces the same rule as a backstop even if this is somehow bypassed.
+  if (!opts.confirmed) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("event_id, stay_start, stay_end")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profile && !isEligibleForSlot(profile, slot.starts_at)) {
+      return { ok: false, error: "schedule_conflict" };
+    }
   }
 
   // Clamp to the DB check (1-6); default solo.

@@ -14,6 +14,8 @@ export type Row = {
   flightNumber: string;
   scheduledMs: number;
   isMe: boolean;
+  full: boolean;
+  joined: boolean;
 };
 
 const WINDOW_MS = 30 * 60_000; // people within 30 min of you share a car
@@ -54,7 +56,7 @@ export function Board({ arrivals, departures }: { arrivals: Row[]; departures: R
           <p className="rides-empty-sub">
             Add yours and everyone flying near your time can split a car with you.
           </p>
-          <Link href={`/rides/add?d=${dir}`} className="add-btn">
+          <Link href="/me" className="add-btn">
             + Add your {dir === "arrival" ? "arrival" : "departure"}
           </Link>
         </div>
@@ -69,6 +71,7 @@ export function Board({ arrivals, departures }: { arrivals: Row[]; departures: R
             {rows.map((r) => (
               <RiderCard
                 key={r.id}
+                flightId={r.id}
                 name={r.name}
                 timeLabel={r.timeLabel}
                 city={r.city}
@@ -76,11 +79,13 @@ export function Board({ arrivals, departures }: { arrivals: Row[]; departures: R
                 airline={r.airline}
                 flightNumber={r.flightNumber}
                 isMe={r.isMe}
+                full={r.full}
+                joined={r.joined}
                 inWindow={!!mine && !r.isMe && Math.abs(r.scheduledMs - mine.scheduledMs) <= WINDOW_MS}
               />
             ))}
           </div>
-          <Link href={`/rides/add?d=${dir}`} className="add-btn">
+          <Link href="/me" className="add-btn">
             {mine ? "Edit your flight" : `+ Add your ${dir === "arrival" ? "arrival" : "departure"}`}
           </Link>
         </>

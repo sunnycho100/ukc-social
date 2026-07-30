@@ -17,18 +17,19 @@ type Msg = {
 
 type Member = { userId: string; name: string; photo_url: string | null };
 
-const TZ = "America/New_York";
-const timeFmt = new Intl.DateTimeFormat("en-US", {
-  hour: "numeric",
-  minute: "2-digit",
-  timeZone: TZ,
-});
-const dayTimeFmt = new Intl.DateTimeFormat("en-US", {
-  weekday: "short",
-  hour: "numeric",
-  minute: "2-digit",
-  timeZone: TZ,
-});
+const fmtTime = (timezone: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
+const fmtDayTime = (timezone: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
 
 // A run break starts a new visual group: different speaker, or >5min gap.
 const RUN_GAP_MS = 5 * 60 * 1000;
@@ -85,8 +86,9 @@ export default function Chat({
   groupId,
   groupName,
   members,
-  meetPlace,
+  starterQuestion,
   meetTime,
+  timezone = "America/New_York",
 }: {
   channelType: "meal" | "ride";
   channelId: string;
@@ -94,9 +96,12 @@ export default function Chat({
   groupId: string;
   groupName: string;
   members: Member[];
-  meetPlace: string | null;
+  starterQuestion: string | null;
   meetTime: string | null;
+  timezone?: string;
 }) {
+  const timeFmt = fmtTime(timezone);
+  const dayTimeFmt = fmtDayTime(timezone);
   const router = useRouter();
   const supabase = useRef(createClient()).current;
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -294,9 +299,7 @@ export default function Chat({
     const extra = names.length - 3;
     return extra > 0 ? `${shown} +${extra}` : shown;
   })();
-  const meetLine = [meetPlace, meetTime && dayTimeFmt.format(new Date(meetTime))]
-    .filter(Boolean)
-    .join(" · ");
+  const meetLine = meetTime ? dayTimeFmt.format(new Date(meetTime)) : "";
 
   return (
     <div className="chat-root">
@@ -389,6 +392,12 @@ export default function Chat({
               <div className="empty-plan">
                 <span className="plan-kicker">Your plan</span>
                 <span className="plan-line">{meetLine}</span>
+              </div>
+            )}
+            {starterQuestion && (
+              <div className="empty-plan empty-plan--starter">
+                <span className="plan-kicker">💬 Break the ice</span>
+                <span className="plan-line">{starterQuestion}</span>
               </div>
             )}
           </div>
@@ -648,6 +657,20 @@ export default function Chat({
           margin-top: 20px; padding-top: 16px;
           border-top: 1px solid var(--line);
         }
+        .empty-plan--starter {
+          border-top: none;
+          margin-top: 14px;
+          padding: 12px 14px;
+          border-radius: 12px;
+          background: color-mix(in srgb, var(--accent) 8%, transparent);
+          border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+          max-width: 320px;
+        }
+        .empty-plan--starter .plan-kicker { color: var(--accent); }
+        .empty-plan--starter .plan-line {
+          font-family: inherit; font-size: 14px; font-weight: 500;
+          line-height: 1.4; color: var(--ink);
+        }
         .sheet-plan { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
         .plan-kicker {
           font-size: 11px; font-weight: 700; text-transform: uppercase;
@@ -672,7 +695,7 @@ export default function Chat({
           flex-shrink: 0; width: 44px; height: 44px;
           display: grid; place-items: center;
           border: none; border-radius: 50%;
-          color: var(--accent-ink); background: var(--accent);
+          color: var(--accent-ink); background: var(--accent-grad);
           cursor: pointer; transition: opacity 150ms ease-out, transform 150ms ease-out;
         }
         .send:disabled { opacity: 0.35; cursor: default; }

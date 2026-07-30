@@ -39,3 +39,10 @@ yarn-error.log*
 
 # E2E demo intermediate recordings (keep the mp4, drop the raw webm)
 demo/raw/
+
+# impeccable critique snapshots (local design history, not source)
+.impeccable/
+
+# generated deck/artifact outputs and their inspect dumps
+outputs/
+docs/ukc-social-pitch-deck-generation.md
