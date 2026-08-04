@@ -412,7 +412,10 @@ export default function Chat({
                 <span
                   key={m.userId}
                   className="empty-av"
-                  style={{ marginLeft: i === 0 ? 0 : -14, zIndex: 5 - i }}
+                  // Same clearance rule as .stack-av: at 52px the initials have
+                  // about 12.5px of side padding and the ring spends 2, so -14
+                  // was cutting into the letters of everyone after the first.
+                  style={{ marginLeft: i === 0 ? 0 : -10, zIndex: 5 - i }}
                 >
                   <Avatar name={m.name} url={m.photo_url} size={52} />
                 </span>
@@ -614,7 +617,13 @@ export default function Chat({
         }
         .head-id:active { background: var(--surface); }
         .stack { display: inline-flex; flex-shrink: 0; }
-        .stack-av { display: inline-flex; margin-left: -9px; }
+        /* Initials sit in about 0.24 of the avatar's width of side padding, so
+           at 26px the glyph has 6.2px of clearance and the 2px ring spends 2 of
+           it. An overlap of 9px painted 4.8px over the neighbour's letters, and
+           every avatar but the last read as a typo: AC came out as "A(". The
+           overlap is now inside the clearance, so the stack still reads as a
+           group and no letter is cut. */
+        .stack-av { display: inline-flex; margin-left: -4px; }
         .stack-av:first-child { margin-left: 0; }
         .stack-av > span { box-shadow: 0 0 0 2px var(--bg); }
         .head-text { min-width: 0; display: flex; flex-direction: column; }
