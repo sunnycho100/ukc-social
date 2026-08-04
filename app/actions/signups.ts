@@ -1,6 +1,7 @@
 "use server";
 
 import { requireUser } from "@/lib/supabase/server";
+import { serviceClient } from "@/lib/supabase/service";
 import { isEligibleForSlot } from "@/lib/scheduleFilter";
 
 type Result = { ok: boolean; error?: string };
@@ -58,5 +59,20 @@ export async function leaveSlot(slotId: string): Promise<Result> {
     .eq("slot_id", slotId)
     .eq("user_id", user.id);
   if (error) return { ok: false, error: error.message };
+
+  // The seat has to leave with the signup. They are separate rows, and
+  // deleting only the signup left someone listed as not going while still
+  // seated at the table, still in its group chat, and still counted by the
+  // tablemates who had already been shown that table.
+  //
+  // Through the service client because group_members carries a select policy
+  // and nothing else: the matcher is the only writer. Scoped to this user's
+  // own rows, and to this slot's tables only.
+  const svc = serviceClient();
+  const { data: seated } = await svc.from("groups").select("id").eq("slot_id", slotId);
+  const groupIds = (seated ?? []).map((g) => g.id as string);
+  if (groupIds.length) {
+    await svc.from("group_members").delete().eq("user_id", user.id).in("group_id", groupIds);
+  }
   return { ok: true };
 }
