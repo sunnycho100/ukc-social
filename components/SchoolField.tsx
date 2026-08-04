@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { searchSchools } from "@/app/actions/schools";
-import type { School } from "@/lib/schools";
+import { matchCanonical, type School } from "@/lib/schools";
 
 // The School / Company field. Suggests canonical university names as you type
 // so that two people at the same school end up with the same string, which is
@@ -57,7 +57,21 @@ export default function SchoolField({
         }}
         onFocus={() => hits.length && setOpen(true)}
         // A click on a suggestion has to land before the list closes.
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        //
+        // Leaving the field also settles what was typed. Picking a suggestion
+        // was the only thing that canonicalised, so anyone who typed "UW
+        // Madison" and moved on was stored under a name of their own and never
+        // grouped with their own school again. matchCanonical only rewrites an
+        // exact name-or-alias hit, so a company or anything ROR does not carry
+        // is still left exactly as entered.
+        onBlur={() => {
+          const canon = matchCanonical(value, hits);
+          if (canon && canon !== value) {
+            typed.current = "";
+            onChange(canon);
+          }
+          setTimeout(() => setOpen(false), 150);
+        }}
       />
 
       {open && !exact && (
