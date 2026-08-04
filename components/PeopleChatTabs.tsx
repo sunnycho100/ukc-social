@@ -12,13 +12,11 @@ import { useState, type ReactNode } from "react";
 // several other ways in: a notification lands on the thread itself, and every
 // table and ride card links to its own chat.
 export default function PeopleChatTabs({
-  kicker,
   people,
   chat,
   unread,
   initialTab = "people",
 }: {
-  kicker: string;
   people: ReactNode;
   chat: ReactNode;
   unread: number;
@@ -29,7 +27,6 @@ export default function PeopleChatTabs({
   return (
     <section style={{ padding: "24px 20px" }}>
       <header className="page-head">
-        <p className="page-kicker">{kicker}</p>
         <h1 className="page-title">People &amp; Chat</h1>
         <p className="page-sub">Everyone who is here, and every conversation you are in.</p>
       </header>

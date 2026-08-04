@@ -67,7 +67,6 @@ export default async function MealsPage() {
   return (
     <section style={{ padding: "24px 20px" }}>
       <header className="page-head">
-        <p className="page-kicker">{conference?.name ?? "Icebreaker"}</p>
         <h1 className="page-title">Meals</h1>
         <p className="page-sub">Grab dinner with people worth meeting.</p>
       </header>

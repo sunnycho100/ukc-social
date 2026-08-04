@@ -109,7 +109,6 @@ export default async function PeoplePage({
 
   return (
     <PeopleChatTabs
-      kicker={conference?.name ?? "Icebreaker"}
       people={people}
       chat={chat.node}
       unread={chat.unread}

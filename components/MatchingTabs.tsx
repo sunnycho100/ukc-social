@@ -6,12 +6,10 @@ import { useState, type ReactNode } from "react";
 // `meals`/`rides` arrive already server-rendered (see app/(tabs)/matching/page.tsx)
 // — this component only toggles which one is visible, no data fetching of its own.
 export default function MatchingTabs({
-  kicker,
   meals,
   rides,
   initialTab = "meals",
 }: {
-  kicker: string;
   meals: ReactNode;
   rides: ReactNode;
   initialTab?: "meals" | "rides";
@@ -24,7 +22,6 @@ export default function MatchingTabs({
   return (
     <section style={{ padding: "24px 20px" }}>
       <header className="page-head">
-        <p className="page-kicker">{kicker}</p>
         <h1 className="page-title">Meals &amp; Rides</h1>
         <p className="page-sub">Grab dinner or split a ride with people worth meeting.</p>
       </header>

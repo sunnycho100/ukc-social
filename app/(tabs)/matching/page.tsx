@@ -18,7 +18,6 @@ export default async function MatchingPage({
   ]);
   return (
     <MatchingTabs
-      kicker={conference?.name ?? "Icebreaker"}
       meals={meals}
       rides={rides}
       initialTab={tab === "rides" ? "rides" : "meals"}

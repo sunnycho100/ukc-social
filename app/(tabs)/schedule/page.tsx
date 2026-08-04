@@ -25,7 +25,6 @@ export default async function BoardPage() {
   return (
     <section style={{ padding: "24px 20px" }}>
       <header className="page-head">
-        <p className="page-kicker">{conference?.name ?? "Icebreaker"}</p>
         <h1 className="page-title">Schedule</h1>
       </header>
 

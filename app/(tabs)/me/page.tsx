@@ -75,7 +75,6 @@ export default async function MePage() {
   return (
     <section style={{ padding: "24px 20px" }}>
       <header className="page-head">
-        <p className="page-kicker">{conference?.name ?? "Icebreaker"}</p>
         <h1 className="page-title">Me</h1>
         <p className="page-sub">Your profile, dinners, and tables.</p>
       </header>

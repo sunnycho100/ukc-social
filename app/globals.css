@@ -111,16 +111,16 @@ h3 {
 
 /* ── Tab page masthead ─────────────────────────────────────────────────────
    Shared editorial header for the tab surfaces (matches home/rides):
-   icy-cyan kicker → display title → subtitle. */
+   display title → subtitle. There was an icy-cyan kicker above the title
+   carrying the conference name, on every tab surface, while the sticky day
+   bar directly above it already reads "D-1 to <name>", "Day 2 of 4 · <name>"
+   or "<name> has wrapped". The name was on screen twice at once, and the
+   second copy spent the loudest colour on the page to repeat it. */
 .page-head { margin-bottom: 20px; }
-.page-kicker {
-  font-size: 12px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.08em; color: var(--accent);
-}
 .page-title {
   font-family: var(--font-display), sans-serif;
   font-size: 34px; font-weight: 800; letter-spacing: -0.03em;
-  line-height: 1.02; margin-top: 10px;
+  line-height: 1.02;
 }
 .page-sub { margin-top: 10px; font-size: 15px; color: var(--ink-2); max-width: 40ch; }
 
