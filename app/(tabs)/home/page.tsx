@@ -231,7 +231,12 @@ export default async function HomePage() {
       ) : (
         <>
           {nextSignup ? (
-            <JoinedWaiting slot={nextSignup} count={waitingCount} timeFmt={timeFmt} />
+            <JoinedWaiting
+              slot={nextSignup}
+              count={waitingCount}
+              timeFmt={timeFmt}
+              conferenceName={conference?.name}
+            />
           ) : (
             <Fresh name={profile.name} conferenceName={conference?.name} />
           )}
@@ -501,10 +506,12 @@ function JoinedWaiting({
   slot,
   count,
   timeFmt,
+  conferenceName,
 }: {
   slot: Slot;
   count: number;
   timeFmt: Intl.DateTimeFormat;
+  conferenceName?: string;
 }) {
   return (
     <div>
@@ -529,8 +536,8 @@ function JoinedWaiting({
             )}
           </div>
           <div style={{ fontSize: 14, color: "var(--ink-2)", marginTop: 10 }}>
-            <strong style={{ color: "var(--ink)" }}>{count}</strong> of Arendelle are in so
-            far.
+            <strong style={{ color: "var(--ink)" }}>{count}</strong>
+            {conferenceName ? ` of ${conferenceName}` : ""} are in so far.
           </div>
         </div>
       )}
