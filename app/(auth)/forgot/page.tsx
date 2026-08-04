@@ -59,7 +59,17 @@ export default function ForgotPage() {
             Enter your email and we&apos;ll send you a link to set a new one.
           </p>
           <form onSubmit={submit} style={{ marginTop: 22 }}>
+            {/* The field had no label, no id and no aria-label, so it reached a
+                screen reader as an unnamed text box. Sign in labels its fields
+                the same way. */}
+            <label
+              htmlFor="forgot-email"
+              style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}
+            >
+              Email
+            </label>
             <input
+              id="forgot-email"
               type="email"
               required
               autoComplete="email"

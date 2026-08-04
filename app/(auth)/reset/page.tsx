@@ -65,12 +65,22 @@ export default function ResetPage() {
             Pick something you&apos;ll remember. At least 6 characters.
           </p>
           <form onSubmit={submit} style={{ marginTop: 22 }}>
+            {/* Same as forgot: the field carried its only name in a placeholder,
+                which is not an accessible name and disappears as soon as you
+                start typing. */}
+            <label
+              htmlFor="reset-password"
+              style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}
+            >
+              New password
+            </label>
             <input
+              id="reset-password"
               type="password"
               required
               minLength={6}
               autoComplete="new-password"
-              placeholder="New password"
+              placeholder="At least 6 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={ready === null}
