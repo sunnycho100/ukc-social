@@ -247,6 +247,7 @@ export default async function HomePage() {
             dayOf={false}
             myInterests={myInterests}
             timezone={conference?.timezone ?? "America/New_York"}
+            joined={signupSlots.length > 0}
           />
         </>
       )}
@@ -356,12 +357,14 @@ function GroupmatesSection({
   dayOf,
   myInterests,
   timezone,
+  joined = false,
 }: {
   tables: TableCard[];
   nextGroupId: string | null;
   dayOf: boolean;
   myInterests: Set<string>;
   timezone: string;
+  joined?: boolean;
 }) {
   const fmt = fmtTime(timezone);
   const dfmt = new Intl.DateTimeFormat("en-US", {
@@ -376,7 +379,13 @@ function GroupmatesSection({
       <div className="hub-head">Your tables</div>
       {tables.length === 0 ? (
         <p style={{ fontSize: 14, color: "var(--ink-2)", marginTop: 8 }}>
-          No one yet. Join a dinner and get matched to see your tablemates here.
+          {/* Tables stay hidden until their reveal (migration 0026), so an
+              empty list here does not mean nobody has been seated. Telling
+              someone who has already joined to go and join a dinner sat
+              directly under a card naming the dinner they are in. */}
+          {joined
+            ? "Your tables appear here once they open."
+            : "No one yet. Join a dinner and get matched to see your tablemates here."}
         </p>
       ) : (
         tables.map((t) => (

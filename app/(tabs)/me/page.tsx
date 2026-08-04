@@ -121,7 +121,12 @@ export default async function MePage() {
         <h2 className="sec-h">My tables</h2>
         {tables.length === 0 ? (
           <p style={{ fontSize: 14, color: "var(--ink-2)", marginTop: 8 }}>
-            No tables assigned yet.
+            {/* A table stays hidden until its reveal, so an empty list is not
+                the same as never having been seated. Saying "none assigned"
+                to someone with dinners below contradicts the page above it. */}
+            {dinners.length > 0
+              ? "Your tables appear here once they open."
+              : "No tables assigned yet."}
           </p>
         ) : (
           <div style={{ marginTop: 8 }}>
