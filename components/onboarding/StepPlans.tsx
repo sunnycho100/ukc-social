@@ -58,6 +58,10 @@ export default function StepPlans({
       .from("slots")
       .select("id,title,starts_at")
       .eq("kind", "meal")
+      // Only dinners you can still join. A closed one was offered like any
+      // other, and signing up for it during onboarding put you in a dinner
+      // whose tables had already been seated and shown.
+      .gt("join_deadline", new Date().toISOString())
       .order("starts_at")
       .then(({ data }) => setSlots((data as Slot[]) ?? []));
   }, []);
