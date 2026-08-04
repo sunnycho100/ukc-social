@@ -206,3 +206,58 @@ describe("matchOneSlot seating", () => {
     expect(r.excluded).toBe(1);
   });
 });
+
+// Migration 0026 gates the whole reveal in RLS, but RLS only has something to
+// gate if the writer stamps the rows on the way in. These cover the writer.
+describe("matchOneSlot reveal gate", () => {
+  const DEADLINE = "2026-08-05T21:00:00Z";
+  const GATED = { ...SLOT, join_deadline: DEADLINE };
+
+  const inserts = (calls: Call[], table: string) =>
+    (calls.find((c) => c.table === table && c.op === "insert")?.payload ?? []) as Record<
+      string,
+      unknown
+    >[];
+
+  it("stamps every table with the slot's join deadline", async () => {
+    const { svc, calls } = setup(8, []);
+    await matchOneSlot(svc, GATED, null);
+
+    const groups = inserts(calls, "groups");
+    expect(groups.length).toBeGreaterThan(0);
+    expect(groups.every((g) => g.reveal_at === DEADLINE)).toBe(true);
+  });
+
+  it("holds the bell back to the same moment as the table", async () => {
+    const { svc, calls } = setup(8, []);
+    await matchOneSlot(svc, GATED, null);
+
+    const notifs = inserts(calls, "notifications");
+    expect(notifs.length).toBeGreaterThan(0);
+    expect(notifs.every((n) => n.visible_at === DEADLINE)).toBe(true);
+  });
+
+  // A slot with no deadline has nothing to wait for, so it must behave exactly
+  // as it did before 0026: table readable now, bell rings now. reveal_at null
+  // reads as "revealed" in group_revealed(), and an omitted visible_at takes
+  // the column default of now().
+  it("leaves a deadline-less slot open, not sealed forever", async () => {
+    const { svc, calls } = setup(8, []);
+    await matchOneSlot(svc, SLOT, null);
+
+    expect(inserts(calls, "groups").every((g) => g.reveal_at === null)).toBe(true);
+    expect(inserts(calls, "notifications").every((n) => !("visible_at" in n))).toBe(true);
+  });
+
+  // The top-up case: someone who joins after the first run is seated at a new
+  // table, and that table has to carry the gate too. A late table stamped null
+  // would be readable immediately while everyone else's stayed shut.
+  it("gates a table seated on a later top-up run", async () => {
+    const { svc, calls } = setup(9, ["u1", "u2", "u3", "u4"]);
+    await matchOneSlot(svc, GATED, null);
+
+    const groups = inserts(calls, "groups");
+    expect(groups.length).toBeGreaterThan(0);
+    expect(groups.every((g) => g.reveal_at === DEADLINE)).toBe(true);
+  });
+});
