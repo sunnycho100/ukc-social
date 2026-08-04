@@ -125,15 +125,21 @@ export default function StepEvent({
 
       {error && <p style={{ color: "var(--danger)", fontSize: 14, marginTop: 16 }}>{error}</p>}
 
-      <button
-        type="button"
-        className="ob-primary"
-        onClick={onContinue}
-        disabled={!ready || busy}
-        style={{ marginTop: 28, width: "100%" }}
-      >
-        {busy ? "Saving…" : "Continue"}
-      </button>
+      {/* The same row the other four steps put their buttons in. .ob-primary
+          carries flex: 1 so it shares that row with Back, and this step has no
+          Back, so the button sat directly in the page's column instead. There
+          flex: 1 means fill the leftover height, and the first screen of
+          onboarding opened with a Continue button a few hundred pixels tall. */}
+      <div style={{ display: "flex", gap: 12, marginTop: 28 }}>
+        <button
+          type="button"
+          className="ob-primary"
+          onClick={onContinue}
+          disabled={!ready || busy}
+        >
+          {busy ? "Saving…" : "Continue"}
+        </button>
+      </div>
 
       <style>{`
         .ev-card {
