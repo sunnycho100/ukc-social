@@ -47,7 +47,30 @@ export default function ScheduleDayView({
           conference is visible at once, you can jump straight to one, and there
           is no hidden "which day am I on" state. Scrolls horizontally so a
           longer conference degrades instead of squashing. */}
-      <div className="day-chips" role="tablist" aria-label="Conference days">
+      <div
+        className="day-chips"
+        role="tablist"
+        aria-label="Conference days"
+        // Arrow keys move between days and only the selected chip is a tab
+        // stop, which is what a tablist promises once it claims the role.
+        // Without it the agenda sat behind one tab press per day of the
+        // conference, and the roles announced a set of tabs with nothing to
+        // move into.
+        onKeyDown={(e) => {
+          const last = days.length - 1;
+          const to =
+            e.key === "ArrowRight" ? Math.min(last, index + 1)
+            : e.key === "ArrowLeft" ? Math.max(0, index - 1)
+            : e.key === "Home" ? 0
+            : e.key === "End" ? last
+            : null;
+          if (to === null) return;
+          e.preventDefault();
+          setIndex(to);
+          const chips = e.currentTarget.querySelectorAll<HTMLButtonElement>(".day-chip");
+          chips[to]?.focus();
+        }}
+      >
         {days.map((d, i) => {
           const dt = new Date(`${d.date}T00:00:00Z`);
           const selected = i === index;
@@ -56,7 +79,10 @@ export default function ScheduleDayView({
               key={d.date}
               type="button"
               role="tab"
+              id={`day-tab-${d.date}`}
+              aria-controls="day-panel"
               aria-selected={selected}
+              tabIndex={selected ? 0 : -1}
               aria-label={`${fullFmt.format(dt)}${d.date === todayDate ? ", today" : ""}`}
               className="day-chip"
               onClick={() => setIndex(i)}
@@ -79,7 +105,12 @@ export default function ScheduleDayView({
           light days out to match only buys an empty box: those days already fit
           in the viewport without scrolling, so the reserved space does nothing.
           The date chips above are what keep you oriented. */}
-      <div className="sched-list">
+      <div
+        className="sched-list"
+        id="day-panel"
+        role="tabpanel"
+        aria-labelledby={`day-tab-${day.date}`}
+      >
         {day.slots.map((slot) => {
           const current =
             isToday && now >= new Date(slot.starts_at).getTime() && now < new Date(slot.ends_at).getTime();
