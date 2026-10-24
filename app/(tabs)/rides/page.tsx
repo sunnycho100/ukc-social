@@ -1,7 +1,9 @@
 import { requireUser } from "@/lib/supabase/server";
 import { getConference } from "@/lib/conference";
 import { DEFAULT_RIDE_WINDOW_HOURS, toLocalInput } from "@/lib/rides";
+import { type Hangout, type HangoutMember } from "@/lib/hangouts";
 import RidePoolCard from "./RidePoolCard";
+import HangoutBoard from "./HangoutBoard";
 
 type Direction = "arrival" | "departure";
 type FlightRow = { direction: Direction; scheduled_at: string; window_hours: number | null };
@@ -42,11 +44,18 @@ export async function RidesListSection() {
     const { data: poolRows } = await supabase
       .from("ride_pools")
       .select("id, direction, pickup_at")
+      // Hangout pools live in these same two tables (migration 0030) and are
+      // rendered by HangoutBoard below, so they are filtered out here rather
+      // than fetched and then dropped on the floor by the loop at the bottom.
+      .in("direction", ["arrival", "departure"])
       .in("id", myPoolIds);
-    const { data: memberRows } = await supabase
-      .from("ride_members")
-      .select("pool_id, user_id, profile:directory_profiles(id, name, photo_url)")
-      .in("pool_id", myPoolIds);
+    const flightPoolIds = (poolRows ?? []).map((p) => p.id as string);
+    const { data: memberRows } = flightPoolIds.length
+      ? await supabase
+          .from("ride_members")
+          .select("pool_id, user_id, profile:directory_profiles(id, name, photo_url)")
+          .in("pool_id", flightPoolIds)
+      : { data: [] as { pool_id: string; user_id: string; profile: PoolMember | null }[] };
 
     const membersByPool = new Map<string, PoolMember[]>();
     for (const r of (memberRows ?? []) as { pool_id: string; user_id: string; profile: PoolMember | PoolMember[] | null }[]) {
@@ -85,7 +94,89 @@ export async function RidesListSection() {
           />
         );
       })}
+      <HangoutsSection
+        myPoolIds={myPoolIds}
+        timezone={timezone}
+        nowIso={new Date().toISOString()}
+      />
     </>
+  );
+}
+
+// Hangouts leaving the hotel: a browse-and-join board rather than the automatic
+// matching the flight cards above get. There is no matching a destination out of
+// a time, so somebody declares one and other people opt in.
+async function HangoutsSection({
+  myPoolIds,
+  timezone,
+  nowIso,
+}: {
+  myPoolIds: string[];
+  timezone: string;
+  nowIso: string;
+}) {
+  const { supabase } = await requireUser();
+
+  const { data: poolRows } = await supabase
+    .from("ride_pools")
+    .select("id, title, pickup_at, capacity, meet_point")
+    .eq("direction", "hangout")
+    .gt("pickup_at", nowIso)
+    .order("pickup_at", { ascending: true });
+
+  const poolIds = (poolRows ?? []).map((p) => p.id as string);
+
+  // Names and photos come off the public roster view so the board can show who
+  // is in a hangout you have not joined.
+  const { data: memberRows } = poolIds.length
+    ? await supabase
+        .from("ride_members")
+        .select("pool_id, user_id, profile:directory_profiles(id, name, photo_url)")
+        .in("pool_id", poolIds)
+    : { data: [] as { pool_id: string; user_id: string; profile: HangoutMember | null }[] };
+
+  const memberIds = [...new Set((memberRows ?? []).map((r) => r.user_id as string))];
+
+  // Handles come off the base table instead, where profiles.p_sel (0008) only
+  // returns a row when the caller shares a channel with that person, which since
+  // 0023 includes sitting in the same ride_members. So this comes back populated
+  // for hangouts you are in and empty for the rest, and "contacts unlock when
+  // you join" is enforced by the database rather than by the component that
+  // draws the list.
+  const { data: contactRows } = memberIds.length
+    ? await supabase.from("profiles").select("id, kakao").in("id", memberIds)
+    : { data: [] as { id: string; kakao: string | null }[] };
+  const kakaoById = new Map((contactRows ?? []).map((r) => [r.id as string, (r.kakao as string) ?? ""]));
+
+  const membersByPool = new Map<string, HangoutMember[]>();
+  for (const r of (memberRows ?? []) as {
+    pool_id: string;
+    user_id: string;
+    profile: HangoutMember | HangoutMember[] | null;
+  }[]) {
+    const p = Array.isArray(r.profile) ? r.profile[0] : r.profile;
+    if (!p) continue;
+    const list = membersByPool.get(r.pool_id) ?? [];
+    list.push({ ...p, kakao: kakaoById.get(r.user_id) ?? "" });
+    membersByPool.set(r.pool_id, list);
+  }
+
+  const hangouts: Hangout[] = (poolRows ?? []).map((p) => ({
+    id: p.id as string,
+    title: p.title as string,
+    leaveAt: p.pickup_at as string,
+    meetPoint: p.meet_point as string,
+    capacity: p.capacity as number,
+    members: membersByPool.get(p.id as string) ?? [],
+  }));
+
+  return (
+    <HangoutBoard
+      hangouts={hangouts}
+      myPoolIds={myPoolIds}
+      timezone={timezone}
+      defaultLocal={`${toLocalInput(nowIso, timezone).slice(0, 10)}T18:00`}
+    />
   );
 }
 

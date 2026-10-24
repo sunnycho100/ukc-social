@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { sendRequest, respondToRequest, removeRequest } from "@/app/actions/hi";
 import { stayRelation, STAY_LABEL, type StayWindow } from "@/lib/stay";
 import { normalizeSchool } from "@/lib/schools";
+import KakaoMark from "./KakaoMark";
 
 export type Person = {
   id: string;
@@ -153,18 +154,9 @@ function shortHandle(v: string): string {
 }
 
 // Brand marks, drawn rather than fetched: a strict CSP and an offline-capable
-// page both rule out hotlinking someone's logo CDN, and three inline paths cost
-// less than three network round trips.
-function KakaoMark() {
-  return (
-    <svg className="ct-mark" viewBox="0 0 24 24" aria-hidden focusable="false">
-      <path
-        fill="#FEE500"
-        d="M12 3.6c-4.7 0-8.5 2.98-8.5 6.65 0 2.36 1.57 4.43 3.94 5.6l-.99 3.65a.3.3 0 0 0 .46.33l4.32-2.85c.25.02.5.03.77.03 4.7 0 8.5-2.98 8.5-6.76S16.7 3.6 12 3.6Z"
-      />
-    </svg>
-  );
-}
+// page both rule out hotlinking someone's logo CDN, and inline paths cost less
+// than the network round trips. KakaoMark moved to its own file when the
+// hangout board started showing it beside a member's name.
 function LinkedInMark() {
   return (
     <svg className="ct-mark" viewBox="0 0 24 24" aria-hidden focusable="false">

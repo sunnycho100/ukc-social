@@ -15,7 +15,7 @@ export default async function RideChatPage({
   // RLS gives members-only access — a non-member gets null → 404.
   const { data: pool } = await supabase
     .from("ride_pools")
-    .select("id, direction, pickup_at")
+    .select("id, direction, pickup_at, title")
     .eq("id", id)
     .maybeSingle();
   if (!pool) notFound();
@@ -37,7 +37,14 @@ export default async function RideChatPage({
     };
   });
 
-  const groupName = pool.direction === "arrival" ? "Arrival ride" : "Departure ride";
+  // A hangout carries its own destination; the two flight pools do not have one
+  // beyond the airport, so they keep their fixed labels.
+  const groupName =
+    pool.direction === "hangout"
+      ? pool.title || "Hangout"
+      : pool.direction === "arrival"
+        ? "Arrival ride"
+        : "Departure ride";
 
   return (
     <Chat
